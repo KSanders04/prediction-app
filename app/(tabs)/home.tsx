@@ -1,0 +1,728 @@
+// app/(tabs)/home/index.tsx
+import React, { useState, useEffect } from 'react';
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  TextInput,
+  StyleSheet,
+  ScrollView,
+  Alert,
+  SafeAreaView,
+} from 'react-native';
+
+// Import your Firebase configuration
+import { db } from '../../firebaseConfig';
+
+// Firebase Firestore functions
+import { 
+  collection, 
+  addDoc, 
+  query, 
+  where, 
+  orderBy,
+  getDocs, 
+  updateDoc, 
+  doc,
+  onSnapshot,
+  Timestamp
+} from 'firebase/firestore';
+
+// Types
+interface Guess {
+  id: string;
+  prediction: string;
+  questionId: string;
+  playerId: string;
+  timestamp: Timestamp;
+}
+
+interface Question {
+  text: string;
+  options: string[];
+}
+
+interface QuestionTypes {
+  [key: string]: Question;
+}
+
+const Home: React.FC = () => {
+  // State variables with proper TypeScript types
+  const [currentView, setCurrentView] = useState<'player' | 'admin'>('player');
+  const [currentGameId, setCurrentGameId] = useState<string | null>(null);
+  const [currentQuestionId, setCurrentQuestionId] = useState<string | null>(null);
+  const [gameName, setGameName] = useState<string>('');
+  const [currentGame, setCurrentGame] = useState<string>('No game active');
+  const [currentQuestion, setCurrentQuestion] = useState<string>('Waiting for question...');
+  const [predictionStatus, setPredictionStatus] = useState<string>('Waiting...');
+  const [userPrediction, setUserPrediction] = useState<string>('');
+  const [allGuesses, setAllGuesses] = useState<Guess[]>([]);
+  const [questionOptions, setQuestionOptions] = useState<string[]>([]);
+  const [correctAnswer, setCorrectAnswer] = useState<string>('Not set');
+  
+  // Generate unique player ID
+  const [playerId] = useState<string>('Player_' + Math.random().toString(36).substr(2, 6));
+
+  // Load real-time data when question changes
+  useEffect(() => {
+    if (currentQuestionId) {
+      const unsubscribe = loadGuessesRealTime();
+      return () => unsubscribe && unsubscribe();
+    }
+  }, [currentQuestionId]);
+
+  // ADMIN FUNCTIONS
+  const adminCreateGame = async (): Promise<void> => {
+    if (!gameName.trim()) {
+      Alert.alert('Error', 'Please enter a game name!');
+      return;
+    }
+
+    try {
+      const docRef = await addDoc(collection(db, "games"), {
+        name: gameName,
+        status: "active",
+        createdAt: new Date()
+      });
+      
+      setCurrentGameId(docRef.id);
+      setCurrentGame(gameName);
+      setGameName('');
+      Alert.alert('Success', `Game created: ${gameName}`);
+      
+    } catch (error) {
+      console.error("Error creating game:", error);
+      Alert.alert('Error', 'Failed to create game');
+    }
+  };
+
+  const adminCreateQuestion = async (questionType: string): Promise<void> => {
+    if (!currentGameId) {
+      Alert.alert('Error', 'Create a game first!');
+      return;
+    }
+
+    const questions: QuestionTypes = {
+      FIELD_GOAL: {
+        text: "Will the field goal be MADE or MISSED?",
+        options: ["MADE", "MISSED"]
+      },
+      COIN_FLIP: {
+        text: "Coin flip: HEADS or TAILS?", 
+        options: ["HEADS", "TAILS"]
+      },
+      NEXT_PLAY: {
+        text: "Next play: RUSH or PASS?",
+        options: ["RUSH", "PASS"]
+      }
+    };
+
+    const questionData = questions[questionType];
+
+    try {
+      const docRef = await addDoc(collection(db, "predictions"), {
+        gameId: currentGameId,
+        question: questionData.text,
+        options: questionData.options,
+        status: "active",
+        actual_result: null,
+        createdAt: new Date()
+      });
+      
+      setCurrentQuestionId(docRef.id);
+      setCurrentQuestion(questionData.text);
+      setQuestionOptions(questionData.options);
+      setPredictionStatus('Predictions OPEN');
+      setUserPrediction(''); // Reset user prediction
+      
+      Alert.alert('Success', `Question created: ${questionData.text}`);
+      
+    } catch (error) {
+      console.error("Error creating question:", error);
+      Alert.alert('Error', 'Failed to create question');
+    }
+  };
+
+  const adminCloseQuestion = async (): Promise<void> => {
+    if (!currentQuestionId) {
+      Alert.alert('Error', 'No active question!');
+      return;
+    }
+
+    try {
+      await updateDoc(doc(db, "predictions", currentQuestionId), {
+        status: "closed"
+      });
+      
+      setPredictionStatus('Predictions CLOSED');
+      Alert.alert('Success', 'Question closed! Players can no longer predict.');
+      
+    } catch (error) {
+      console.error("Error:", error);
+      Alert.alert('Error', 'Failed to close question');
+    }
+  };
+
+  const adminSetAnswer = async (answer: string): Promise<void> => {
+    if (!currentQuestionId) {
+      Alert.alert('Error', 'No question active!');
+      return;
+    }
+
+    try {
+      await updateDoc(doc(db, "predictions", currentQuestionId), {
+        actual_result: answer,
+        status: "finished"
+      });
+      
+      setCorrectAnswer(answer);
+      setPredictionStatus('Results Available');
+      Alert.alert('Success', `Answer set to: ${answer}`);
+      
+    } catch (error) {
+      console.error("Error:", error);
+      Alert.alert('Error', 'Failed to set answer');
+    }
+  };
+
+  const adminCalculateWinners = async (): Promise<void> => {
+    if (!currentQuestionId || correctAnswer === 'Not set') {
+      Alert.alert('Error', 'Set the correct answer first!');
+      return;
+    }
+
+    try {
+      const guessesQuery = query(
+        collection(db, "guesses"),
+        where("questionId", "==", currentQuestionId)
+      );
+      const snapshot = await getDocs(guessesQuery);
+
+      let winners = 0;
+      let total = 0;
+
+      snapshot.forEach((doc) => {
+        const guess = doc.data();
+        total++;
+        if (guess.prediction === correctAnswer) {
+          winners++;
+        }
+      });
+
+      Alert.alert(
+        'Results', 
+        `🏆 FINAL RESULTS 🏆\n\nCorrect Answer: ${correctAnswer}\nWinners: ${winners} out of ${total} players\n\nAccuracy: ${total > 0 ? Math.round((winners/total) * 100) : 0}%`
+      );
+      
+    } catch (error) {
+      console.error("Error:", error);
+      Alert.alert('Error', 'Failed to calculate winners');
+    }
+  };
+
+  // PLAYER FUNCTIONS
+  const playerMakePrediction = async (choice: string): Promise<void> => {
+    if (!currentQuestionId) {
+      Alert.alert('Error', 'No active question!');
+      return;
+    }
+
+    if (predictionStatus === 'Predictions CLOSED' || predictionStatus === 'Results Available') {
+      Alert.alert('Error', 'Predictions are closed!');
+      return;
+    }
+
+    try {
+      await addDoc(collection(db, "guesses"), {
+        prediction: choice,
+        questionId: currentQuestionId,
+        playerId: playerId,
+        timestamp: new Date()
+      });
+
+      setUserPrediction(choice);
+      Alert.alert('Success', `Your prediction: ${choice} has been submitted!`);
+      
+    } catch (error) {
+      console.error("Error:", error);
+      Alert.alert('Error', 'Failed to submit prediction');
+    }
+  };
+
+  // Real-time data loading
+  const loadGuessesRealTime = () => {
+    if (!currentQuestionId) return;
+
+    const guessesQuery = query(
+      collection(db, "guesses"),
+      where("questionId", "==", currentQuestionId),
+      orderBy("timestamp", "asc")
+    );
+
+    const unsubscribe = onSnapshot(guessesQuery, (snapshot) => {
+      const guesses: Guess[] = [];
+      snapshot.forEach((doc) => {
+        guesses.push({ id: doc.id, ...doc.data() } as Guess);
+      });
+      setAllGuesses(guesses);
+    });
+
+    return unsubscribe;
+  };
+
+  // ADMIN VIEW COMPONENT
+  const AdminView: React.FC = () => (
+    <ScrollView style={styles.container}>
+      <Text style={styles.title}>🔧 ADMIN PANEL</Text>
+      
+      {/* Create Game */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Step 1: Create Game</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="Game name (e.g., Ball State vs Toledo)"
+          value={gameName}
+          onChangeText={setGameName}
+          placeholderTextColor="#7f8c8d"
+        />
+        <TouchableOpacity style={styles.adminButton} onPress={adminCreateGame}>
+          <Text style={styles.buttonText}>🎮 Create Game</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Create Questions */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Step 2: Create Question</Text>
+        <TouchableOpacity 
+          style={styles.adminButton} 
+          onPress={() => adminCreateQuestion('FIELD_GOAL')}
+        >
+          <Text style={styles.buttonText}>🥅 Field Goal Question</Text>
+        </TouchableOpacity>
+        <TouchableOpacity 
+          style={styles.adminButton} 
+          onPress={() => adminCreateQuestion('COIN_FLIP')}
+        >
+          <Text style={styles.buttonText}>🪙 Coin Flip Question</Text>
+        </TouchableOpacity>
+        <TouchableOpacity 
+          style={styles.adminButton} 
+          onPress={() => adminCreateQuestion('NEXT_PLAY')}
+        >
+          <Text style={styles.buttonText}>🏈 Next Play Question</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Control Game */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Step 3: Control Game</Text>
+        <TouchableOpacity style={styles.dangerButton} onPress={adminCloseQuestion}>
+          <Text style={styles.buttonText}>🛑 Close Predictions</Text>
+        </TouchableOpacity>
+        
+        <Text style={styles.subTitle}>Set Answer:</Text>
+        {questionOptions.map((option: string, index: number) => (
+          <TouchableOpacity 
+            key={index}
+            style={styles.successButton} 
+            onPress={() => adminSetAnswer(option)}
+          >
+            <Text style={styles.buttonText}>✅ Answer: {option}</Text>
+          </TouchableOpacity>
+        ))}
+        
+        <TouchableOpacity style={styles.primaryButton} onPress={adminCalculateWinners}>
+          <Text style={styles.buttonText}>🏆 Calculate Winners</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Game Status */}
+      <View style={styles.statusSection}>
+        <Text style={styles.statusTitle}>Current Status:</Text>
+        <Text style={styles.statusText}>📱 Game: {currentGame}</Text>
+        <Text style={styles.statusText}>❓ Question: {currentQuestion}</Text>
+        <Text style={styles.statusText}>🔄 Status: {predictionStatus}</Text>
+        <Text style={styles.statusText}>✅ Answer: {correctAnswer}</Text>
+        <Text style={styles.statusText}>👥 Total Predictions: {allGuesses.length}</Text>
+      </View>
+    </ScrollView>
+  );
+
+  // PLAYER VIEW COMPONENT
+  const PlayerView: React.FC = () => (
+    <ScrollView style={styles.container}>
+      <Text style={styles.title}>🎯 MAKE PREDICTION</Text>
+      
+      {/* Game Info */}
+      <View style={styles.gameInfo}>
+        <Text style={styles.gameText}>🏈 {currentGame}</Text>
+        <Text style={[styles.statusBadge, 
+          predictionStatus === 'Predictions OPEN' ? styles.openStatus : styles.closedStatus
+        ]}>
+          {predictionStatus}
+        </Text>
+      </View>
+
+      {/* Question */}
+      <View style={styles.questionSection}>
+        <Text style={styles.questionText}>{currentQuestion}</Text>
+        
+        {/* Prediction Buttons */}
+        {predictionStatus === 'Predictions OPEN' && questionOptions.map((option: string, index: number) => (
+          <TouchableOpacity 
+            key={index}
+            style={[styles.predictButton, userPrediction === option && styles.selectedButton]} 
+            onPress={() => playerMakePrediction(option)}
+          >
+            <Text style={styles.buttonText}>
+              {option} {userPrediction === option && '✓'}
+            </Text>
+          </TouchableOpacity>
+        ))}
+        
+        {predictionStatus === 'Predictions CLOSED' && (
+          <Text style={styles.closedText}>🛑 Predictions are closed. Waiting for results...</Text>
+        )}
+        
+        {userPrediction !== '' && (
+          <View style={styles.userChoiceContainer}>
+            <Text style={styles.userChoice}>Your prediction: {userPrediction}</Text>
+          </View>
+        )}
+      </View>
+
+      {/* All Guesses */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>
+          👥 All Predictions ({allGuesses.length})
+        </Text>
+        {allGuesses.length === 0 ? (
+          <Text style={styles.noGuessesText}>No predictions yet. Be the first!</Text>
+        ) : (
+          allGuesses.map((guess: Guess, index: number) => {
+            const isCorrect = correctAnswer !== 'Not set' && guess.prediction === correctAnswer;
+            const isWrong = correctAnswer !== 'Not set' && guess.prediction !== correctAnswer;
+            const isCurrentUser = guess.playerId === playerId;
+            
+            return (
+              <View key={index} style={[
+                styles.guessItem,
+                isCorrect && styles.correctGuess,
+                isWrong && styles.wrongGuess,
+                isCurrentUser && styles.currentUserGuess
+              ]}>
+                <Text style={styles.guessText}>
+                  {isCurrentUser ? '👤 You' : guess.playerId}: {guess.prediction}
+                  {isCorrect && ' ✅'}
+                  {isWrong && ' ❌'}
+                  {correctAnswer === 'Not set' && ' ⏳'}
+                </Text>
+              </View>
+            );
+          })
+        )}
+        
+        {correctAnswer !== 'Not set' && (
+          <View style={styles.correctAnswerBox}>
+            <Text style={styles.correctAnswerText}>
+              🎯 Correct Answer: {correctAnswer}
+            </Text>
+          </View>
+        )}
+      </View>
+    </ScrollView>
+  );
+
+  return (
+    <SafeAreaView style={styles.app}>
+      {/* View Toggle */}
+      <View style={styles.toggleContainer}>
+        <TouchableOpacity 
+          style={[styles.toggleButton, currentView === 'admin' && styles.activeToggle]}
+          onPress={() => setCurrentView('admin')}
+        >
+          <Text style={[styles.toggleText, currentView === 'admin' && styles.activeToggleText]}>
+            👨‍💼 Admin
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity 
+          style={[styles.toggleButton, currentView === 'player' && styles.activeToggle]}
+          onPress={() => setCurrentView('player')}
+        >
+          <Text style={[styles.toggleText, currentView === 'player' && styles.activeToggleText]}>
+            🎯 Player
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Show current view */}
+      {currentView === 'admin' ? <AdminView /> : <PlayerView />}
+    </SafeAreaView>
+  );
+};
+
+const styles = StyleSheet.create({
+  app: {
+    flex: 1,
+    backgroundColor: '#f5f7fa',
+  },
+  container: {
+    flex: 1,
+    padding: 20,
+  },
+  title: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: 25,
+    color: '#2c3e50',
+  },
+  section: {
+    backgroundColor: 'white',
+    padding: 20,
+    marginBottom: 15,
+    borderRadius: 15,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  sectionTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 15,
+    color: '#2c3e50',
+  },
+  subTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginTop: 15,
+    marginBottom: 10,
+    color: '#34495e',
+  },
+  input: {
+    borderWidth: 2,
+    borderColor: '#ecf0f1',
+    padding: 15,
+    borderRadius: 12,
+    marginBottom: 15,
+    fontSize: 16,
+    backgroundColor: '#f8f9fa',
+    color: '#2c3e50',
+  },
+  adminButton: {
+    backgroundColor: '#e74c3c',
+    padding: 18,
+    borderRadius: 12,
+    marginBottom: 12,
+    alignItems: 'center',
+  },
+  predictButton: {
+    backgroundColor: '#27ae60',
+    padding: 22,
+    borderRadius: 15,
+    marginBottom: 15,
+    alignItems: 'center',
+  },
+  selectedButton: {
+    backgroundColor: '#16a085',
+    borderWidth: 3,
+    borderColor: '#1abc9c',
+  },
+  dangerButton: {
+    backgroundColor: '#c0392b',
+    padding: 18,
+    borderRadius: 12,
+    marginBottom: 12,
+    alignItems: 'center',
+  },
+  successButton: {
+    backgroundColor: '#27ae60',
+    padding: 18,
+    borderRadius: 12,
+    marginBottom: 12,
+    alignItems: 'center',
+  },
+  primaryButton: {
+    backgroundColor: '#3498db',
+    padding: 18,
+    borderRadius: 12,
+    marginBottom: 12,
+    alignItems: 'center',
+  },
+  buttonText: {
+    color: 'white',
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  toggleContainer: {
+    flexDirection: 'row',
+    backgroundColor: 'white',
+    margin: 20,
+    borderRadius: 15,
+    padding: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  toggleButton: {
+    flex: 1,
+    padding: 15,
+    alignItems: 'center',
+    borderRadius: 12,
+  },
+  activeToggle: {
+    backgroundColor: '#3498db',
+  },
+  toggleText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#7f8c8d',
+  },
+  activeToggleText: {
+    color: 'white',
+  },
+  gameInfo: {
+    backgroundColor: 'white',
+    padding: 20,
+    borderRadius: 15,
+    marginBottom: 15,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  gameText: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#2c3e50',
+    marginBottom: 10,
+  },
+  statusBadge: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    paddingHorizontal: 15,
+    paddingVertical: 8,
+    borderRadius: 20,
+    overflow: 'hidden',
+  },
+  openStatus: {
+    backgroundColor: '#d4edda',
+    color: '#155724',
+  },
+  closedStatus: {
+    backgroundColor: '#f8d7da',
+    color: '#721c24',
+  },
+  questionSection: {
+    backgroundColor: 'white',
+    padding: 25,
+    borderRadius: 20,
+    marginBottom: 15,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
+    elevation: 8,
+  },
+  questionText: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: 25,
+    color: '#2c3e50',
+    lineHeight: 28,
+  },
+  closedText: {
+    fontSize: 18,
+    color: '#e74c3c',
+    textAlign: 'center',
+    fontStyle: 'italic',
+  },
+  userChoiceContainer: {
+    backgroundColor: '#e8f5e8',
+    padding: 15,
+    borderRadius: 12,
+    marginTop: 20,
+    borderLeftWidth: 4,
+    borderLeftColor: '#27ae60',
+  },
+  userChoice: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#27ae60',
+    textAlign: 'center',
+  },
+  statusSection: {
+    backgroundColor: '#ecf0f1',
+    padding: 20,
+    borderRadius: 15,
+    marginTop: 10,
+  },
+  statusTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 10,
+    color: '#2c3e50',
+  },
+  statusText: {
+    fontSize: 16,
+    color: '#34495e',
+    marginBottom: 8,
+    lineHeight: 22,
+  },
+  guessItem: {
+    backgroundColor: '#f8f9fa',
+    padding: 15,
+    borderRadius: 12,
+    marginBottom: 10,
+    borderLeftWidth: 4,
+    borderLeftColor: '#bdc3c7',
+  },
+  correctGuess: {
+    backgroundColor: '#d4edda',
+    borderLeftColor: '#28a745',
+  },
+  wrongGuess: {
+    backgroundColor: '#f8d7da',
+    borderLeftColor: '#dc3545',
+  },
+  currentUserGuess: {
+    backgroundColor: '#e3f2fd',
+    borderLeftColor: '#2196f3',
+  },
+  guessText: {
+    fontSize: 16,
+    color: '#2c3e50',
+    fontWeight: '500',
+  },
+  noGuessesText: {
+    fontSize: 16,
+    color: '#7f8c8d',
+    textAlign: 'center',
+    fontStyle: 'italic',
+    padding: 20,
+  },
+  correctAnswerBox: {
+    backgroundColor: '#fff3cd',
+    padding: 15,
+    borderRadius: 12,
+    marginTop: 15,
+    borderWidth: 2,
+    borderColor: '#ffc107',
+  },
+  correctAnswerText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#856404',
+    textAlign: 'center',
+  },
+});
+
+export default Home;
