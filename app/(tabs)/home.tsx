@@ -1,5 +1,5 @@
-// app/(tabs)/home/index.tsx
-import React, { useState, useEffect } from 'react';
+// app/(tabs)/home.tsx - COMPLETE VERSION WITH KEYBOARD FIX
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -13,8 +13,6 @@ import {
 
 // Import your Firebase configuration
 import { db } from '../../firebaseConfig';
-
-// Firebase Firestore functions
 import { 
   collection, 
   addDoc, 
@@ -37,31 +35,22 @@ interface Guess {
   timestamp: Timestamp;
 }
 
-interface Question {
-  text: string;
-  options: string[];
-}
-
-interface QuestionTypes {
-  [key: string]: Question;
-}
-
-const Home: React.FC = () => {
-  // State variables with proper TypeScript types
-  const [currentView, setCurrentView] = useState<'player' | 'admin'>('player');
+export default function Home() {
+  // State variables
+  const [currentView, setCurrentView] = useState<'player' | 'admin'>('admin');
   const [currentGameId, setCurrentGameId] = useState<string | null>(null);
   const [currentQuestionId, setCurrentQuestionId] = useState<string | null>(null);
-  const [gameName, setGameName] = useState<string>('');
-  const [currentGame, setCurrentGame] = useState<string>('No game active');
-  const [currentQuestion, setCurrentQuestion] = useState<string>('Waiting for question...');
-  const [predictionStatus, setPredictionStatus] = useState<string>('Waiting...');
-  const [userPrediction, setUserPrediction] = useState<string>('');
+  const [gameName, setGameName] = useState('');
+  const [currentGame, setCurrentGame] = useState('No game active');
+  const [currentQuestion, setCurrentQuestion] = useState('Waiting for question...');
+  const [predictionStatus, setPredictionStatus] = useState('Waiting...');
+  const [userPrediction, setUserPrediction] = useState('');
   const [allGuesses, setAllGuesses] = useState<Guess[]>([]);
   const [questionOptions, setQuestionOptions] = useState<string[]>([]);
-  const [correctAnswer, setCorrectAnswer] = useState<string>('Not set');
+  const [correctAnswer, setCorrectAnswer] = useState('Not set');
   
   // Generate unique player ID
-  const [playerId] = useState<string>('Player_' + Math.random().toString(36).substr(2, 6));
+  const [playerId] = useState('Player_' + Math.random().toString(36).substr(2, 6));
 
   // Load real-time data when question changes
   useEffect(() => {
@@ -71,8 +60,17 @@ const Home: React.FC = () => {
     }
   }, [currentQuestionId]);
 
+  // MEMOIZED HANDLERS (prevents re-renders)
+  const handleGameNameChange = useCallback((text: string) => {
+    setGameName(text);
+  }, []);
+
+  const handleViewChange = useCallback((view: 'player' | 'admin') => {
+    setCurrentView(view);
+  }, []);
+
   // ADMIN FUNCTIONS
-  const adminCreateGame = async (): Promise<void> => {
+  const adminCreateGame = useCallback(async () => {
     if (!gameName.trim()) {
       Alert.alert('Error', 'Please enter a game name!');
       return;
@@ -94,15 +92,15 @@ const Home: React.FC = () => {
       console.error("Error creating game:", error);
       Alert.alert('Error', 'Failed to create game');
     }
-  };
+  }, [gameName]);
 
-  const adminCreateQuestion = async (questionType: string): Promise<void> => {
+  const adminCreateQuestion = useCallback(async (questionType: string) => {
     if (!currentGameId) {
       Alert.alert('Error', 'Create a game first!');
       return;
     }
 
-    const questions: QuestionTypes = {
+    const questions: { [key: string]: { text: string; options: string[] } } = {
       FIELD_GOAL: {
         text: "Will the field goal be MADE or MISSED?",
         options: ["MADE", "MISSED"]
@@ -133,7 +131,7 @@ const Home: React.FC = () => {
       setCurrentQuestion(questionData.text);
       setQuestionOptions(questionData.options);
       setPredictionStatus('Predictions OPEN');
-      setUserPrediction(''); // Reset user prediction
+      setUserPrediction('');
       
       Alert.alert('Success', `Question created: ${questionData.text}`);
       
@@ -141,9 +139,9 @@ const Home: React.FC = () => {
       console.error("Error creating question:", error);
       Alert.alert('Error', 'Failed to create question');
     }
-  };
+  }, [currentGameId]);
 
-  const adminCloseQuestion = async (): Promise<void> => {
+  const adminCloseQuestion = useCallback(async () => {
     if (!currentQuestionId) {
       Alert.alert('Error', 'No active question!');
       return;
@@ -155,15 +153,15 @@ const Home: React.FC = () => {
       });
       
       setPredictionStatus('Predictions CLOSED');
-      Alert.alert('Success', 'Question closed! Players can no longer predict.');
+      Alert.alert('Success', 'Question closed!');
       
     } catch (error) {
       console.error("Error:", error);
       Alert.alert('Error', 'Failed to close question');
     }
-  };
+  }, [currentQuestionId]);
 
-  const adminSetAnswer = async (answer: string): Promise<void> => {
+  const adminSetAnswer = useCallback(async (answer: string) => {
     if (!currentQuestionId) {
       Alert.alert('Error', 'No question active!');
       return;
@@ -183,9 +181,9 @@ const Home: React.FC = () => {
       console.error("Error:", error);
       Alert.alert('Error', 'Failed to set answer');
     }
-  };
+  }, [currentQuestionId]);
 
-  const adminCalculateWinners = async (): Promise<void> => {
+  const adminCalculateWinners = useCallback(async () => {
     if (!currentQuestionId || correctAnswer === 'Not set') {
       Alert.alert('Error', 'Set the correct answer first!');
       return;
@@ -218,10 +216,10 @@ const Home: React.FC = () => {
       console.error("Error:", error);
       Alert.alert('Error', 'Failed to calculate winners');
     }
-  };
+  }, [currentQuestionId, correctAnswer]);
 
   // PLAYER FUNCTIONS
-  const playerMakePrediction = async (choice: string): Promise<void> => {
+  const playerMakePrediction = useCallback(async (choice: string) => {
     if (!currentQuestionId) {
       Alert.alert('Error', 'No active question!');
       return;
@@ -247,10 +245,10 @@ const Home: React.FC = () => {
       console.error("Error:", error);
       Alert.alert('Error', 'Failed to submit prediction');
     }
-  };
+  }, [currentQuestionId, predictionStatus, playerId]);
 
   // Real-time data loading
-  const loadGuessesRealTime = () => {
+  const loadGuessesRealTime = useCallback(() => {
     if (!currentQuestionId) return;
 
     const guessesQuery = query(
@@ -268,170 +266,7 @@ const Home: React.FC = () => {
     });
 
     return unsubscribe;
-  };
-
-  // ADMIN VIEW COMPONENT
-  const AdminView: React.FC = () => (
-    <ScrollView style={styles.container}>
-      <Text style={styles.title}>🔧 ADMIN PANEL</Text>
-      
-      {/* Create Game */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Step 1: Create Game</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="Game name (e.g., Ball State vs Toledo)"
-          value={gameName}
-          onChangeText={setGameName}
-          placeholderTextColor="#7f8c8d"
-        />
-        <TouchableOpacity style={styles.adminButton} onPress={adminCreateGame}>
-          <Text style={styles.buttonText}>🎮 Create Game</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Create Questions */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Step 2: Create Question</Text>
-        <TouchableOpacity 
-          style={styles.adminButton} 
-          onPress={() => adminCreateQuestion('FIELD_GOAL')}
-        >
-          <Text style={styles.buttonText}>🥅 Field Goal Question</Text>
-        </TouchableOpacity>
-        <TouchableOpacity 
-          style={styles.adminButton} 
-          onPress={() => adminCreateQuestion('COIN_FLIP')}
-        >
-          <Text style={styles.buttonText}>🪙 Coin Flip Question</Text>
-        </TouchableOpacity>
-        <TouchableOpacity 
-          style={styles.adminButton} 
-          onPress={() => adminCreateQuestion('NEXT_PLAY')}
-        >
-          <Text style={styles.buttonText}>🏈 Next Play Question</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Control Game */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Step 3: Control Game</Text>
-        <TouchableOpacity style={styles.dangerButton} onPress={adminCloseQuestion}>
-          <Text style={styles.buttonText}>🛑 Close Predictions</Text>
-        </TouchableOpacity>
-        
-        <Text style={styles.subTitle}>Set Answer:</Text>
-        {questionOptions.map((option: string, index: number) => (
-          <TouchableOpacity 
-            key={index}
-            style={styles.successButton} 
-            onPress={() => adminSetAnswer(option)}
-          >
-            <Text style={styles.buttonText}>✅ Answer: {option}</Text>
-          </TouchableOpacity>
-        ))}
-        
-        <TouchableOpacity style={styles.primaryButton} onPress={adminCalculateWinners}>
-          <Text style={styles.buttonText}>🏆 Calculate Winners</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Game Status */}
-      <View style={styles.statusSection}>
-        <Text style={styles.statusTitle}>Current Status:</Text>
-        <Text style={styles.statusText}>📱 Game: {currentGame}</Text>
-        <Text style={styles.statusText}>❓ Question: {currentQuestion}</Text>
-        <Text style={styles.statusText}>🔄 Status: {predictionStatus}</Text>
-        <Text style={styles.statusText}>✅ Answer: {correctAnswer}</Text>
-        <Text style={styles.statusText}>👥 Total Predictions: {allGuesses.length}</Text>
-      </View>
-    </ScrollView>
-  );
-
-  // PLAYER VIEW COMPONENT
-  const PlayerView: React.FC = () => (
-    <ScrollView style={styles.container}>
-      <Text style={styles.title}>🎯 MAKE PREDICTION</Text>
-      
-      {/* Game Info */}
-      <View style={styles.gameInfo}>
-        <Text style={styles.gameText}>🏈 {currentGame}</Text>
-        <Text style={[styles.statusBadge, 
-          predictionStatus === 'Predictions OPEN' ? styles.openStatus : styles.closedStatus
-        ]}>
-          {predictionStatus}
-        </Text>
-      </View>
-
-      {/* Question */}
-      <View style={styles.questionSection}>
-        <Text style={styles.questionText}>{currentQuestion}</Text>
-        
-        {/* Prediction Buttons */}
-        {predictionStatus === 'Predictions OPEN' && questionOptions.map((option: string, index: number) => (
-          <TouchableOpacity 
-            key={index}
-            style={[styles.predictButton, userPrediction === option && styles.selectedButton]} 
-            onPress={() => playerMakePrediction(option)}
-          >
-            <Text style={styles.buttonText}>
-              {option} {userPrediction === option && '✓'}
-            </Text>
-          </TouchableOpacity>
-        ))}
-        
-        {predictionStatus === 'Predictions CLOSED' && (
-          <Text style={styles.closedText}>🛑 Predictions are closed. Waiting for results...</Text>
-        )}
-        
-        {userPrediction !== '' && (
-          <View style={styles.userChoiceContainer}>
-            <Text style={styles.userChoice}>Your prediction: {userPrediction}</Text>
-          </View>
-        )}
-      </View>
-
-      {/* All Guesses */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>
-          👥 All Predictions ({allGuesses.length})
-        </Text>
-        {allGuesses.length === 0 ? (
-          <Text style={styles.noGuessesText}>No predictions yet. Be the first!</Text>
-        ) : (
-          allGuesses.map((guess: Guess, index: number) => {
-            const isCorrect = correctAnswer !== 'Not set' && guess.prediction === correctAnswer;
-            const isWrong = correctAnswer !== 'Not set' && guess.prediction !== correctAnswer;
-            const isCurrentUser = guess.playerId === playerId;
-            
-            return (
-              <View key={index} style={[
-                styles.guessItem,
-                isCorrect && styles.correctGuess,
-                isWrong && styles.wrongGuess,
-                isCurrentUser && styles.currentUserGuess
-              ]}>
-                <Text style={styles.guessText}>
-                  {isCurrentUser ? '👤 You' : guess.playerId}: {guess.prediction}
-                  {isCorrect && ' ✅'}
-                  {isWrong && ' ❌'}
-                  {correctAnswer === 'Not set' && ' ⏳'}
-                </Text>
-              </View>
-            );
-          })
-        )}
-        
-        {correctAnswer !== 'Not set' && (
-          <View style={styles.correctAnswerBox}>
-            <Text style={styles.correctAnswerText}>
-              🎯 Correct Answer: {correctAnswer}
-            </Text>
-          </View>
-        )}
-      </View>
-    </ScrollView>
-  );
+  }, [currentQuestionId]);
 
   return (
     <SafeAreaView style={styles.app}>
@@ -439,7 +274,7 @@ const Home: React.FC = () => {
       <View style={styles.toggleContainer}>
         <TouchableOpacity 
           style={[styles.toggleButton, currentView === 'admin' && styles.activeToggle]}
-          onPress={() => setCurrentView('admin')}
+          onPress={() => handleViewChange('admin')}
         >
           <Text style={[styles.toggleText, currentView === 'admin' && styles.activeToggleText]}>
             👨‍💼 Admin
@@ -447,7 +282,7 @@ const Home: React.FC = () => {
         </TouchableOpacity>
         <TouchableOpacity 
           style={[styles.toggleButton, currentView === 'player' && styles.activeToggle]}
-          onPress={() => setCurrentView('player')}
+          onPress={() => handleViewChange('player')}
         >
           <Text style={[styles.toggleText, currentView === 'player' && styles.activeToggleText]}>
             🎯 Player
@@ -455,11 +290,179 @@ const Home: React.FC = () => {
         </TouchableOpacity>
       </View>
 
-      {/* Show current view */}
-      {currentView === 'admin' ? <AdminView /> : <PlayerView />}
+      {currentView === 'admin' ? (
+        // ADMIN VIEW
+        <ScrollView 
+          style={styles.container}
+          keyboardShouldPersistTaps="always"
+          showsVerticalScrollIndicator={false}
+        >
+          <Text style={styles.title}>🔧 ADMIN PANEL</Text>
+          
+          {/* Create Game */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Step 1: Create Game</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Game name (e.g., Ball State vs Toledo)"
+              value={gameName}
+              onChangeText={handleGameNameChange}
+              placeholderTextColor="#7f8c8d"
+              autoCorrect={false}
+              autoCapitalize="words"
+            />
+            <TouchableOpacity style={styles.adminButton} onPress={adminCreateGame}>
+              <Text style={styles.buttonText}>🎮 Create Game</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Create Questions */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Step 2: Create Question</Text>
+            <TouchableOpacity 
+              style={styles.adminButton} 
+              onPress={() => adminCreateQuestion('FIELD_GOAL')}
+            >
+              <Text style={styles.buttonText}>🥅 Field Goal Question</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={styles.adminButton} 
+              onPress={() => adminCreateQuestion('COIN_FLIP')}
+            >
+              <Text style={styles.buttonText}>🪙 Coin Flip Question</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={styles.adminButton} 
+              onPress={() => adminCreateQuestion('NEXT_PLAY')}
+            >
+              <Text style={styles.buttonText}>🏈 Next Play Question</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Control Game */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Step 3: Control Game</Text>
+            <TouchableOpacity style={styles.dangerButton} onPress={adminCloseQuestion}>
+              <Text style={styles.buttonText}>🛑 Close Predictions</Text>
+            </TouchableOpacity>
+            
+            <Text style={styles.subTitle}>Set Answer:</Text>
+            {questionOptions.map((option, index) => (
+              <TouchableOpacity 
+                key={`answer-${option}-${index}`}
+                style={styles.successButton} 
+                onPress={() => adminSetAnswer(option)}
+              >
+                <Text style={styles.buttonText}>✅ Answer: {option}</Text>
+              </TouchableOpacity>
+            ))}
+            
+            <TouchableOpacity style={styles.primaryButton} onPress={adminCalculateWinners}>
+              <Text style={styles.buttonText}>🏆 Calculate Winners</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Game Status */}
+          <View style={styles.statusSection}>
+            <Text style={styles.statusTitle}>Current Status:</Text>
+            <Text style={styles.statusText}>📱 Game: {currentGame}</Text>
+            <Text style={styles.statusText}>❓ Question: {currentQuestion}</Text>
+            <Text style={styles.statusText}>🔄 Status: {predictionStatus}</Text>
+            <Text style={styles.statusText}>✅ Answer: {correctAnswer}</Text>
+            <Text style={styles.statusText}>👥 Total Predictions: {allGuesses.length}</Text>
+          </View>
+        </ScrollView>
+      ) : (
+        // PLAYER VIEW
+        <ScrollView 
+          style={styles.container}
+          keyboardShouldPersistTaps="always"
+          showsVerticalScrollIndicator={false}
+        >
+          <Text style={styles.title}>🎯 MAKE PREDICTION</Text>
+          
+          {/* Game Info */}
+          <View style={styles.gameInfo}>
+            <Text style={styles.gameText}>🏈 {currentGame}</Text>
+            <Text style={[styles.statusBadge, 
+              predictionStatus === 'Predictions OPEN' ? styles.openStatus : styles.closedStatus
+            ]}>
+              {predictionStatus}
+            </Text>
+          </View>
+
+          {/* Question */}
+          <View style={styles.questionSection}>
+            <Text style={styles.questionText}>{currentQuestion}</Text>
+            
+            {/* Prediction Buttons */}
+            {predictionStatus === 'Predictions OPEN' && questionOptions.map((option, index) => (
+              <TouchableOpacity 
+                key={`predict-${option}-${index}`}
+                style={[styles.predictButton, userPrediction === option && styles.selectedButton]} 
+                onPress={() => playerMakePrediction(option)}
+              >
+                <Text style={styles.buttonText}>
+                  {option} {userPrediction === option && '✓'}
+                </Text>
+              </TouchableOpacity>
+            ))}
+            
+            {predictionStatus === 'Predictions CLOSED' && (
+              <Text style={styles.closedText}>🛑 Predictions are closed. Waiting for results...</Text>
+            )}
+            
+            {userPrediction !== '' && (
+              <View style={styles.userChoiceContainer}>
+                <Text style={styles.userChoice}>Your prediction: {userPrediction}</Text>
+              </View>
+            )}
+          </View>
+
+          {/* All Guesses */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>
+              👥 All Predictions ({allGuesses.length})
+            </Text>
+            {allGuesses.length === 0 ? (
+              <Text style={styles.noGuessesText}>No predictions yet. Be the first!</Text>
+            ) : (
+              allGuesses.map((guess, index) => {
+                const isCorrect = correctAnswer !== 'Not set' && guess.prediction === correctAnswer;
+                const isWrong = correctAnswer !== 'Not set' && guess.prediction !== correctAnswer;
+                const isCurrentUser = guess.playerId === playerId;
+                
+                return (
+                  <View key={`guess-${guess.id}-${index}`} style={[
+                    styles.guessItem,
+                    isCorrect && styles.correctGuess,
+                    isWrong && styles.wrongGuess,
+                    isCurrentUser && styles.currentUserGuess
+                  ]}>
+                    <Text style={styles.guessText}>
+                      {isCurrentUser ? '👤 You' : guess.playerId}: {guess.prediction}
+                      {isCorrect && ' ✅'}
+                      {isWrong && ' ❌'}
+                      {correctAnswer === 'Not set' && ' ⏳'}
+                    </Text>
+                  </View>
+                );
+              })
+            )}
+            
+            {correctAnswer !== 'Not set' && (
+              <View style={styles.correctAnswerBox}>
+                <Text style={styles.correctAnswerText}>
+                  🎯 Correct Answer: {correctAnswer}
+                </Text>
+              </View>
+            )}
+          </View>
+        </ScrollView>
+      )}
     </SafeAreaView>
   );
-};
+}
 
 const styles = StyleSheet.create({
   app: {
@@ -724,5 +727,3 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 });
-
-export default Home;
