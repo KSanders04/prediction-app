@@ -1,4 +1,4 @@
-// app/(tabs)/home.tsx - COMPLETE VERSION WITH KEYBOARD FIX
+// app/(tabs)/home.tsx 
 import React, { useState, useCallback, useEffect } from 'react';
 import {
   View,
@@ -11,7 +11,7 @@ import {
   SafeAreaView,
 } from 'react-native';
 
-// Import your Firebase configuration
+// Import irebase configuration
 import { db } from '../../firebaseConfig';
 import { 
   collection, 
