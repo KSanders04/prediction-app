@@ -1,4 +1,4 @@
-// app/(tabs)/home.tsx 
+// app/(tabs)/home.tsx - COMPLETE VERSION WITH KEYBOARD FIX
 import React, { useState, useCallback, useEffect } from 'react';
 import {
   View,
@@ -11,7 +11,7 @@ import {
   SafeAreaView,
 } from 'react-native';
 
-// Import irebase configuration
+// Import your Firebase configuration
 import { db } from '../../firebaseConfig';
 import { 
   collection, 
@@ -19,11 +19,14 @@ import {
   query, 
   where, 
   orderBy,
-  getDocs, 
+  getDocs,
+  getDoc,
+  setDoc, 
   updateDoc, 
   doc,
   onSnapshot,
-  Timestamp
+  Timestamp,
+  increment
 } from 'firebase/firestore';
 
 // Types
@@ -35,6 +38,15 @@ interface Guess {
   timestamp: Timestamp;
 }
 
+interface User {
+  name: string;
+  totalPoints: number;
+  gamesPlayed: number;
+  correctPredictions: number;
+  totalPredictions: number;
+  lastPlayed: Timestamp;
+}
+
 export default function Home() {
   // State variables
   const [currentView, setCurrentView] = useState<'player' | 'admin'>('admin');
@@ -44,6 +56,7 @@ export default function Home() {
   const [currentGame, setCurrentGame] = useState('No game active');
   const [currentQuestion, setCurrentQuestion] = useState('Waiting for question...');
   const [predictionStatus, setPredictionStatus] = useState('Waiting...');
+  const [gamePhase, setGamePhase] = useState<'waiting' | 'predicting' | 'playing' | 'results'>('waiting');
   const [userPrediction, setUserPrediction] = useState('');
   const [allGuesses, setAllGuesses] = useState<Guess[]>([]);
   const [questionOptions, setQuestionOptions] = useState<string[]>([]);
@@ -51,6 +64,11 @@ export default function Home() {
   
   // Generate unique player ID
   const [playerId] = useState('Player_' + Math.random().toString(36).substr(2, 6));
+
+  // Initialize user when component mounts
+  useEffect(() => {
+    initializeUser();
+  }, []);
 
   // Load real-time data when question changes
   useEffect(() => {
@@ -67,6 +85,47 @@ export default function Home() {
 
   const handleViewChange = useCallback((view: 'player' | 'admin') => {
     setCurrentView(view);
+  }, []);
+
+  // USER MANAGEMENT FUNCTIONS
+  const initializeUser = useCallback(async () => {
+    try {
+      const userRef = doc(db, "users", playerId);
+      const userSnap = await getDoc(userRef);
+      
+      if (!userSnap.exists()) {
+        // Create new user
+        await setDoc(userRef, {
+          name: playerId,
+          totalPoints: 0,
+          gamesPlayed: 0,
+          correctPredictions: 0,
+          totalPredictions: 0,
+          lastPlayed: new Date()
+        });
+      }
+    } catch (error) {
+      console.error("Error initializing user:", error);
+    }
+  }, [playerId]);
+
+  const updateUserStats = useCallback(async (userId: string, isCorrect: boolean, gameId: string) => {
+    try {
+      const userRef = doc(db, "users", userId);
+      const updates: any = {
+        totalPredictions: increment(1),
+        lastPlayed: new Date()
+      };
+
+      if (isCorrect) {
+        updates.correctPredictions = increment(1);
+        updates.totalPoints = increment(10); // 10 points per correct prediction
+      }
+
+      await updateDoc(userRef, updates);
+    } catch (error) {
+      console.error("Error updating user stats:", error);
+    }
   }, []);
 
   // ADMIN FUNCTIONS
@@ -123,6 +182,7 @@ export default function Home() {
         question: questionData.text,
         options: questionData.options,
         status: "active",
+        phase: "predicting",  // New field
         actual_result: null,
         createdAt: new Date()
       });
@@ -131,6 +191,7 @@ export default function Home() {
       setCurrentQuestion(questionData.text);
       setQuestionOptions(questionData.options);
       setPredictionStatus('Predictions OPEN');
+      setGamePhase('predicting');  // New state
       setUserPrediction('');
       
       Alert.alert('Success', `Question created: ${questionData.text}`);
@@ -149,11 +210,13 @@ export default function Home() {
 
     try {
       await updateDoc(doc(db, "predictions", currentQuestionId), {
-        status: "closed"
+        status: "closed",
+        phase: "playing"  // Game is now happening
       });
       
-      setPredictionStatus('Predictions CLOSED');
-      Alert.alert('Success', 'Question closed!');
+      setPredictionStatus('Predictions CLOSED - Game in Progress');
+      setGamePhase('playing');
+      Alert.alert('Success', 'Predictions closed! Game is now in progress.');
       
     } catch (error) {
       console.error("Error:", error);
@@ -170,12 +233,14 @@ export default function Home() {
     try {
       await updateDoc(doc(db, "predictions", currentQuestionId), {
         actual_result: answer,
-        status: "finished"
+        status: "finished",
+        phase: "results"  // Now showing results
       });
       
       setCorrectAnswer(answer);
       setPredictionStatus('Results Available');
-      Alert.alert('Success', `Answer set to: ${answer}`);
+      setGamePhase('results');
+      Alert.alert('Success', `Answer set to: ${answer}. Results are now visible!`);
       
     } catch (error) {
       console.error("Error:", error);
@@ -198,25 +263,51 @@ export default function Home() {
 
       let winners = 0;
       let total = 0;
+      const updatePromises: Promise<void>[] = [];
 
       snapshot.forEach((doc) => {
         const guess = doc.data();
         total++;
-        if (guess.prediction === correctAnswer) {
+        const isCorrect = guess.prediction === correctAnswer;
+        
+        if (isCorrect) {
           winners++;
         }
+
+        // Update user stats for each player
+        updatePromises.push(updateUserStats(guess.playerId, isCorrect, currentGameId || ''));
       });
+
+      // Update game as played for current user if they participated
+      const currentUserGuess = allGuesses.find(guess => guess.playerId === playerId);
+      if (currentUserGuess) {
+        updatePromises.push(updateGamePlayedCount(playerId));
+      }
+
+      // Execute all updates
+      await Promise.all(updatePromises);
 
       Alert.alert(
         'Results', 
-        `🏆 FINAL RESULTS 🏆\n\nCorrect Answer: ${correctAnswer}\nWinners: ${winners} out of ${total} players\n\nAccuracy: ${total > 0 ? Math.round((winners/total) * 100) : 0}%`
+        `🏆 FINAL RESULTS 🏆\n\nCorrect Answer: ${correctAnswer}\nWinners: ${winners} out of ${total} players\n\nAccuracy: ${total > 0 ? Math.round((winners/total) * 100) : 0}%\n\n✨ Leaderboard updated!`
       );
       
     } catch (error) {
       console.error("Error:", error);
       Alert.alert('Error', 'Failed to calculate winners');
     }
-  }, [currentQuestionId, correctAnswer]);
+  }, [currentQuestionId, correctAnswer, currentGameId, playerId, allGuesses, updateUserStats]);
+
+  const updateGamePlayedCount = useCallback(async (userId: string) => {
+    try {
+      const userRef = doc(db, "users", userId);
+      await updateDoc(userRef, {
+        gamesPlayed: increment(1)
+      });
+    } catch (error) {
+      console.error("Error updating games played:", error);
+    }
+  }, []);
 
   // PLAYER FUNCTIONS
   const playerMakePrediction = useCallback(async (choice: string) => {
@@ -253,8 +344,8 @@ export default function Home() {
 
     const guessesQuery = query(
       collection(db, "guesses"),
-      where("questionId", "==", currentQuestionId),
-      orderBy("timestamp", "asc")
+      where("questionId", "==", currentQuestionId)
+      // Removed orderBy to avoid index requirement
     );
 
     const unsubscribe = onSnapshot(guessesQuery, (snapshot) => {
@@ -262,6 +353,8 @@ export default function Home() {
       snapshot.forEach((doc) => {
         guesses.push({ id: doc.id, ...doc.data() } as Guess);
       });
+      // Sort in JavaScript instead
+      guesses.sort((a, b) => a.timestamp.seconds - b.timestamp.seconds);
       setAllGuesses(guesses);
     });
 
@@ -346,7 +439,7 @@ export default function Home() {
               <Text style={styles.buttonText}>🛑 Close Predictions</Text>
             </TouchableOpacity>
             
-            <Text style={styles.subTitle}>Set Answer:</Text>
+            <Text style={styles.subTitle}>Set Answer (only after real play happens):</Text>
             {questionOptions.map((option, index) => (
               <TouchableOpacity 
                 key={`answer-${option}-${index}`}
@@ -408,6 +501,10 @@ export default function Home() {
               </TouchableOpacity>
             ))}
             
+            {predictionStatus === 'Predictions CLOSED - Game in Progress' && (
+              <Text style={styles.closedText}>🏈 Game in progress! Wait for results...</Text>
+            )}
+            
             {predictionStatus === 'Predictions CLOSED' && (
               <Text style={styles.closedText}>🛑 Predictions are closed. Waiting for results...</Text>
             )}
@@ -435,22 +532,23 @@ export default function Home() {
                 return (
                   <View key={`guess-${guess.id}-${index}`} style={[
                     styles.guessItem,
-                    isCorrect && styles.correctGuess,
-                    isWrong && styles.wrongGuess,
+                    // Only show win/loss colors if results are revealed
+                    gamePhase === 'results' && isCorrect && styles.correctGuess,
+                    gamePhase === 'results' && isWrong && styles.wrongGuess,
                     isCurrentUser && styles.currentUserGuess
                   ]}>
                     <Text style={styles.guessText}>
                       {isCurrentUser ? '👤 You' : guess.playerId}: {guess.prediction}
-                      {isCorrect && ' ✅'}
-                      {isWrong && ' ❌'}
-                      {correctAnswer === 'Not set' && ' ⏳'}
+                      {gamePhase === 'results' && isCorrect && ' ✅'}
+                      {gamePhase === 'results' && isWrong && ' ❌'}
+                      {gamePhase !== 'results' && ' ⏳'}
                     </Text>
                   </View>
                 );
               })
             )}
             
-            {correctAnswer !== 'Not set' && (
+            {correctAnswer !== 'Not set' && gamePhase === 'results' && (
               <View style={styles.correctAnswerBox}>
                 <Text style={styles.correctAnswerText}>
                   🎯 Correct Answer: {correctAnswer}
