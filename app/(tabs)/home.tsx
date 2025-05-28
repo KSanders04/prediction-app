@@ -12,7 +12,8 @@ import {
 } from 'react-native';
 
 // Import irebase configuration
-import { db } from '../../firebaseConfig';
+import { auth, db } from '../../firebaseConfig';
+import { onAuthStateChanged } from 'firebase/auth';
 import { 
   collection, 
   addDoc, 
@@ -23,7 +24,8 @@ import {
   updateDoc, 
   doc,
   onSnapshot,
-  Timestamp
+  Timestamp,
+  getDoc
 } from 'firebase/firestore';
 
 // Types
@@ -48,6 +50,7 @@ export default function Home() {
   const [allGuesses, setAllGuesses] = useState<Guess[]>([]);
   const [questionOptions, setQuestionOptions] = useState<string[]>([]);
   const [correctAnswer, setCorrectAnswer] = useState('Not set');
+  const [isAdminAccount, setIsAdminAccount] = useState<boolean | null>(null)
   
   // Generate unique player ID
   const [playerId] = useState('Player_' + Math.random().toString(36).substr(2, 6));
@@ -59,6 +62,29 @@ export default function Home() {
       return () => unsubscribe && unsubscribe();
     }
   }, [currentQuestionId]);
+
+useEffect(() => {
+  const unsubscribe = onAuthStateChanged(auth, async (user) => {
+    if (user) {
+      const userRef = doc(db, 'users', user.uid);
+      const userSnap = await getDoc(userRef);
+
+      if (userSnap.exists()) {
+        const data = userSnap.data();
+        if (data.isAdmin !== null) {
+          setIsAdminAccount(data.isAdmin);
+          console.log('User isAdmin:', data.isAdmin);
+        } else {
+          console.log('isAdmin is null');
+        }
+      }
+    } else {
+      setIsAdminAccount(null); // or false, depending on your logic
+    }
+  });
+
+  return () => unsubscribe(); // cleanup
+}, []);
 
   // MEMOIZED HANDLERS (prevents re-renders)
   const handleGameNameChange = useCallback((text: string) => {
@@ -160,6 +186,25 @@ export default function Home() {
       Alert.alert('Error', 'Failed to close question');
     }
   }, [currentQuestionId]);
+  const adminEndedGame = useCallback(async () => {
+    if (!currentGameId) {
+      Alert.alert('Error', 'No active game!');
+      return;
+    }
+
+    try {
+      await updateDoc(doc(db, "games", currentGameId), {
+        status: "closed"
+      });
+      
+      setCurrentGameId(null);
+      Alert.alert('Success', 'Game Ended!');
+      
+    } catch (error) {
+      console.error("Error:", error);
+      Alert.alert('Error', 'Failed to close game');
+    }
+  }, [currentGameId]);
 
   const adminSetAnswer = useCallback(async (answer: string) => {
     if (!currentQuestionId) {
@@ -272,14 +317,14 @@ export default function Home() {
     <SafeAreaView style={styles.app}>
       {/* View Toggle */}
       <View style={styles.toggleContainer}>
-        <TouchableOpacity 
+        {isAdminAccount !== null ? <TouchableOpacity 
           style={[styles.toggleButton, currentView === 'admin' && styles.activeToggle]}
           onPress={() => handleViewChange('admin')}
         >
           <Text style={[styles.toggleText, currentView === 'admin' && styles.activeToggleText]}>
             👨‍💼 Admin
           </Text>
-        </TouchableOpacity>
+        </TouchableOpacity> : null}
         <TouchableOpacity 
           style={[styles.toggleButton, currentView === 'player' && styles.activeToggle]}
           onPress={() => handleViewChange('player')}
@@ -290,7 +335,7 @@ export default function Home() {
         </TouchableOpacity>
       </View>
 
-      {currentView === 'admin' ? (
+      {isAdminAccount !== null ? (currentView === 'admin' ? (
         // ADMIN VIEW
         <ScrollView 
           style={styles.container}
@@ -345,6 +390,9 @@ export default function Home() {
             <TouchableOpacity style={styles.dangerButton} onPress={adminCloseQuestion}>
               <Text style={styles.buttonText}>🛑 Close Predictions</Text>
             </TouchableOpacity>
+              {currentGameId !== null ? <TouchableOpacity style={styles.dangerButton} onPress={adminEndedGame}>
+              <Text style={styles.buttonText}>🛑 End Game</Text>
+            </TouchableOpacity>: null}
             
             <Text style={styles.subTitle}>Set Answer:</Text>
             {questionOptions.map((option, index) => (
@@ -372,7 +420,91 @@ export default function Home() {
             <Text style={styles.statusText}>👥 Total Predictions: {allGuesses.length}</Text>
           </View>
         </ScrollView>
-      ) : (
+      ): <ScrollView 
+          style={styles.container}
+          keyboardShouldPersistTaps="always"
+          showsVerticalScrollIndicator={false}
+        >
+          <Text style={styles.title}>🎯 MAKE PREDICTION</Text>
+          
+          {/* Game Info */}
+          <View style={styles.gameInfo}>
+            <Text style={styles.gameText}>🏈 {currentGameId !== null ? currentGame : null}</Text>
+            <Text style={[styles.statusBadge, 
+              predictionStatus === 'Predictions OPEN' ? styles.openStatus : styles.closedStatus
+            ]}>
+              {predictionStatus}
+            </Text>
+          </View>
+
+          {/* Question */}
+          <View style={styles.questionSection}>
+            <Text style={styles.questionText}>{currentQuestion}</Text>
+            
+            {/* Prediction Buttons */}
+            {predictionStatus === 'Predictions OPEN' && questionOptions.map((option, index) => (
+              <TouchableOpacity 
+                key={`predict-${option}-${index}`}
+                style={[styles.predictButton, userPrediction === option && styles.selectedButton]} 
+                onPress={() => playerMakePrediction(option)}
+              >
+                <Text style={styles.buttonText}>
+                  {option} {userPrediction === option && '✓'}
+                </Text>
+              </TouchableOpacity>
+            ))}
+            
+            {predictionStatus === 'Predictions CLOSED' && (
+              <Text style={styles.closedText}>🛑 Predictions are closed. Waiting for results...</Text>
+            )}
+            
+            {userPrediction !== '' && (
+              <View style={styles.userChoiceContainer}>
+                <Text style={styles.userChoice}>Your prediction: {userPrediction}</Text>
+              </View>
+            )}
+          </View>
+
+          {/* All Guesses */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>
+              👥 All Predictions ({allGuesses.length})
+            </Text>
+            {allGuesses.length === 0 ? (
+              <Text style={styles.noGuessesText}>No predictions yet. Be the first!</Text>
+            ) : (
+              allGuesses.map((guess, index) => {
+                const isCorrect = correctAnswer !== 'Not set' && guess.prediction === correctAnswer;
+                const isWrong = correctAnswer !== 'Not set' && guess.prediction !== correctAnswer;
+                const isCurrentUser = guess.playerId === playerId;
+                
+                return (
+                  <View key={`guess-${guess.id}-${index}`} style={[
+                    styles.guessItem,
+                    isCorrect && styles.correctGuess,
+                    isWrong && styles.wrongGuess,
+                    isCurrentUser && styles.currentUserGuess
+                  ]}>
+                    <Text style={styles.guessText}>
+                      {isCurrentUser ? '👤 You' : guess.playerId}: {guess.prediction}
+                      {isCorrect && ' ✅'}
+                      {isWrong && ' ❌'}
+                      {correctAnswer === 'Not set' && ' ⏳'}
+                    </Text>
+                  </View>
+                );
+              })
+            )}
+            
+            {correctAnswer !== 'Not set' && (
+              <View style={styles.correctAnswerBox}>
+                <Text style={styles.correctAnswerText}>
+                  🎯 Correct Answer: {correctAnswer}
+                </Text>
+              </View>
+            )}
+          </View>
+        </ScrollView>) : (
         // PLAYER VIEW
         <ScrollView 
           style={styles.container}
@@ -383,7 +515,7 @@ export default function Home() {
           
           {/* Game Info */}
           <View style={styles.gameInfo}>
-            <Text style={styles.gameText}>🏈 {currentGame}</Text>
+            <Text style={styles.gameText}>🏈 {currentGameId !== null ? currentGame : null}</Text>
             <Text style={[styles.statusBadge, 
               predictionStatus === 'Predictions OPEN' ? styles.openStatus : styles.closedStatus
             ]}>
