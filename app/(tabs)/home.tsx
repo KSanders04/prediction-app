@@ -9,6 +9,7 @@ import {
   ScrollView,
   Alert,
   SafeAreaView,
+  Button,
 } from 'react-native';
 
 // Import irebase configuration
@@ -25,8 +26,11 @@ import {
   doc,
   onSnapshot,
   Timestamp,
-  getDoc
+  getDoc,
+  setDoc,
+  increment
 } from 'firebase/firestore';
+import YoutubePlayer from 'react-native-youtube-iframe'
 
 // Types
 interface Guess {
@@ -50,7 +54,13 @@ export default function Home() {
   const [allGuesses, setAllGuesses] = useState<Guess[]>([]);
   const [questionOptions, setQuestionOptions] = useState<string[]>([]);
   const [correctAnswer, setCorrectAnswer] = useState('Not set');
+
   const [isAdminAccount, setIsAdminAccount] = useState<boolean | null>(null)
+
+  const [gameURL, setGameURL] = useState('')
+  const [currentGameURL, setCurrentGameURL] = useState('')
+  const [isVideoPlaying, setIsVideoPlaying] = useState(false)
+
   
   // Generate unique player ID
   const [playerId] = useState('Player_' + Math.random().toString(36).substr(2, 6));
@@ -95,6 +105,80 @@ useEffect(() => {
     setCurrentView(view);
   }, []);
 
+
+
+  //Video URL Functions
+  const onVideoStateChange = (state: "unstarted" | "ended" | "playing" | "paused" | "buffering" | "cued") => {
+  if (state === "playing") {
+    setIsVideoPlaying(true);
+  } else if (state === "paused" || state === "ended") {
+    setIsVideoPlaying(false);
+    if (state === "ended") {
+      setCurrentGameURL("");
+    }
+  }
+};
+
+
+  const togglePlaying = useCallback(() => {
+    setIsVideoPlaying((prev) => !prev);
+  }, []);
+
+  const getURLID = (url: string): string => {
+  try {
+    const parsed = new URL(url);
+    if (parsed.hostname === 'youtu.be') {
+      return parsed.pathname.slice(1);
+    }
+    return parsed.searchParams.get('v') || '';
+  } catch {
+    return '';
+  }
+};
+
+  // USER MANAGEMENT FUNCTIONS
+  const initializeUser = useCallback(async () => {
+    try {
+      const userRef = doc(db, "users", playerId);
+      const userSnap = await getDoc(userRef);
+      
+      if (!userSnap.exists()) {
+        // Create new user
+        await setDoc(userRef, {
+          name: playerId,
+          totalPoints: 0,
+          gamesPlayed: 0,
+          correctPredictions: 0,
+          totalPredictions: 0,
+          lastPlayed: new Date()
+        });
+      }
+    } catch (error) {
+      console.error("Error initializing user:", error);
+    }
+  }, [playerId]);
+
+  const updateUserStats = useCallback(async (userId: string, isCorrect: boolean, gameId: string) => {
+    try {
+      const userRef = doc(db, "users", userId);
+      const updates: any = {
+        totalPredictions: increment(1),
+        lastPlayed: new Date()
+      };
+
+      if (isCorrect) {
+        updates.correctPredictions = increment(1);
+        updates.totalPoints = increment(10); // 10 points per correct prediction
+      }
+
+      await updateDoc(userRef, updates);
+    } catch (error) {
+      console.error("Error updating user stats:", error);
+    }
+  }, []);
+
+
+
   // ADMIN FUNCTIONS
   const adminCreateGame = useCallback(async () => {
     if (!gameName.trim()) {
@@ -103,22 +187,27 @@ useEffect(() => {
     }
 
     try {
+      const videoID = getURLID(gameURL)
       const docRef = await addDoc(collection(db, "games"), {
         name: gameName,
         status: "active",
-        createdAt: new Date()
+        createdAt: new Date(),
+        url: gameURL,
+        videoId: videoID
       });
       
       setCurrentGameId(docRef.id);
       setCurrentGame(gameName);
+      setCurrentGameURL(gameURL);
       setGameName('');
+      setGameURL('')
       Alert.alert('Success', `Game created: ${gameName}`);
       
     } catch (error) {
       console.error("Error creating game:", error);
       Alert.alert('Error', 'Failed to create game');
     }
-  }, [gameName]);
+  }, [gameName, gameURL]);
 
   const adminCreateQuestion = useCallback(async (questionType: string) => {
     if (!currentGameId) {
@@ -344,22 +433,61 @@ useEffect(() => {
         >
           <Text style={styles.title}>🔧 ADMIN PANEL</Text>
           
-          {/* Create Game */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Step 1: Create Game</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Game name (e.g., Ball State vs Toledo)"
-              value={gameName}
-              onChangeText={handleGameNameChange}
-              placeholderTextColor="#7f8c8d"
-              autoCorrect={false}
-              autoCapitalize="words"
-            />
-            <TouchableOpacity style={styles.adminButton} onPress={adminCreateGame}>
-              <Text style={styles.buttonText}>🎮 Create Game</Text>
-            </TouchableOpacity>
-          </View>
+          {!currentGameURL || getURLID(currentGameURL) === "" ? (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Step 1: Create Game</Text>
+
+              <TextInput
+                style={styles.input}
+                placeholder="Game name (e.g., Ball State vs Toledo)"
+                value={gameName}
+                onChangeText={handleGameNameChange}
+                placeholderTextColor="#7f8c8d"
+                autoCorrect={false}
+                autoCapitalize="words"
+              />
+
+              <TextInput 
+                style={styles.input} 
+                placeholder="Game URL" 
+                value={gameURL}
+                onChangeText={setGameURL} 
+                placeholderTextColor="#7f8c8d" 
+                autoCorrect={false} 
+                autoCapitalize='none' 
+              />
+
+              <TouchableOpacity style={styles.adminButton} onPress={adminCreateGame}>
+                <Text style={styles.buttonText}>🎮 Create Game</Text>
+              </TouchableOpacity>
+            </View>
+          ) : null}
+
+          {currentGameURL !== "" && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Game Play</Text>
+              <YoutubePlayer
+                height={200}
+                play={isVideoPlaying}
+                videoId={getURLID(currentGameURL)}
+                onChangeState={onVideoStateChange}
+              />
+              <TouchableOpacity style={styles.primaryButton} onPress={togglePlaying}>
+                <Text style={styles.buttonText}>▶️ {isVideoPlaying ? "Pause" : "Play"}</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.dangerButton}
+                onPress={() => {
+                  setCurrentGameURL("");
+                  setGameURL("");
+                  setIsVideoPlaying(false);
+                }}
+              >
+                <Text style={styles.buttonText}>♻️ Remove Video</Text>
+              </TouchableOpacity>
+            </View>
+          )}
 
           {/* Create Questions */}
           <View style={styles.section}>
@@ -429,7 +557,22 @@ useEffect(() => {
           
           {/* Game Info */}
           <View style={styles.gameInfo}>
+
             <Text style={styles.gameText}>🏈 {currentGameId !== null ? currentGame : null}</Text>
+
+            <Text style={styles.gameText}>🏈 {currentGameId !== null ? currentGame : null}</Text>
+
+            <Text style={styles.gameText}>🏈 {currentGame}</Text>
+            {currentGameURL !== "" && (
+              <YoutubePlayer
+                  height={200}
+                  play={isVideoPlaying}
+                  videoId={getURLID(currentGameURL)}
+                  onChangeState={onVideoStateChange}
+                />
+            )}
+
+
             <Text style={[styles.statusBadge, 
               predictionStatus === 'Predictions OPEN' ? styles.openStatus : styles.closedStatus
             ]}>

@@ -28,7 +28,7 @@ export default function TabLayout() {
       }}>
       <Tabs.Screen
         name="home"
-        options={{href:null,
+        options={{
           title: 'PointIQ',
           tabBarIcon: ({ color }) => <TabBarIcon name="code" color={color} />,
           headerRight: () => (
@@ -70,7 +70,7 @@ export default function TabLayout() {
       />
       <Tabs.Screen
         name="two"
-        options={{href:null,
+        options={{
           title: 'two',
           tabBarIcon: ({ color }) => <TabBarIcon name="code" color={color} />,
           headerRight: () => (
