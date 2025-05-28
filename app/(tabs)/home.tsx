@@ -356,20 +356,7 @@ export default function Home() {
       
       // COMPLETE RESET - Clear everything
       setCurrentGameId(null);
-      setCurrentGame('No game active');
-      setCurrentGameURL('');
-      setIsVideoPlaying(false);
-      setCurrentQuestionId(null);
-      setCurrentQuestion('Waiting for question...');
-      setPredictionStatus('Waiting...');
-      setQuestionOptions([]);
-      setCorrectAnswer('Not set');
-      setUserPrediction('');
-      setAllGuesses([]); // Clear all predictions
-      setGameName('');
-      setGameURL('');
-      
-      Alert.alert('Success', 'Game Ended! Everything has been reset.');
+      Alert.alert('Success', 'Game Ended!');
       
     } catch (error: any) {
       console.error("Error ending game:", error);
@@ -664,7 +651,91 @@ export default function Home() {
             <Text style={styles.statusText}>👥 Total Predictions: {allGuesses.length}</Text>
           </View>
         </ScrollView>
-      ) : (
+      ): <ScrollView 
+          style={styles.container}
+          keyboardShouldPersistTaps="always"
+          showsVerticalScrollIndicator={false}
+        >
+          <Text style={styles.title}>🎯 MAKE PREDICTION</Text>
+          
+          {/* Game Info */}
+          <View style={styles.gameInfo}>
+            <Text style={styles.gameText}>🏈 {currentGame}</Text>
+            <Text style={[styles.statusBadge, 
+              predictionStatus === 'Predictions OPEN' ? styles.openStatus : styles.closedStatus
+            ]}>
+              {predictionStatus}
+            </Text>
+          </View>
+
+          {/* Question */}
+          <View style={styles.questionSection}>
+            <Text style={styles.questionText}>{currentQuestion}</Text>
+            
+            {/* Prediction Buttons */}
+            {predictionStatus === 'Predictions OPEN' && questionOptions.map((option, index) => (
+              <TouchableOpacity 
+                key={`predict-${option}-${index}`}
+                style={[styles.predictButton, userPrediction === option && styles.selectedButton]} 
+                onPress={() => playerMakePrediction(option)}
+              >
+                <Text style={styles.buttonText}>
+                  {option} {userPrediction === option && '✓'}
+                </Text>
+              </TouchableOpacity>
+            ))}
+            
+            {predictionStatus === 'Predictions CLOSED' && (
+              <Text style={styles.closedText}>🛑 Predictions are closed. Waiting for results...</Text>
+            )}
+            
+            {userPrediction !== '' && (
+              <View style={styles.userChoiceContainer}>
+                <Text style={styles.userChoice}>Your prediction: {userPrediction}</Text>
+              </View>
+            )}
+          </View>
+
+          {/* All Guesses */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>
+              👥 All Predictions ({allGuesses.length})
+            </Text>
+            {allGuesses.length === 0 ? (
+              <Text style={styles.noGuessesText}>No predictions yet. Be the first!</Text>
+            ) : (
+              allGuesses.map((guess, index) => {
+                const isCorrect = correctAnswer !== 'Not set' && guess.prediction === correctAnswer;
+                const isWrong = correctAnswer !== 'Not set' && guess.prediction !== correctAnswer;
+                const isCurrentUser = guess.playerId === playerId;
+                
+                return (
+                  <View key={`guess-${guess.id}-${index}`} style={[
+                    styles.guessItem,
+                    isCorrect && styles.correctGuess,
+                    isWrong && styles.wrongGuess,
+                    isCurrentUser && styles.currentUserGuess
+                  ]}>
+                    <Text style={styles.guessText}>
+                      {isCurrentUser ? '👤 You' : guess.playerId}: {guess.prediction}
+                      {isCorrect && ' ✅'}
+                      {isWrong && ' ❌'}
+                      {correctAnswer === 'Not set' && ' ⏳'}
+                    </Text>
+                  </View>
+                );
+              })
+            )}
+            
+            {correctAnswer !== 'Not set' && (
+              <View style={styles.correctAnswerBox}>
+                <Text style={styles.correctAnswerText}>
+                  🎯 Correct Answer: {correctAnswer}
+                </Text>
+              </View>
+            )}
+          </View>
+        </ScrollView>) : (
         // PLAYER VIEW
         <ScrollView 
           style={styles.container}
