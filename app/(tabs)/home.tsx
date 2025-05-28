@@ -286,6 +286,9 @@ useEffect(() => {
       });
       
       setCurrentGameId(null);
+      setCurrentGameURL("");
+      setGameURL("");
+      setIsVideoPlaying(false);
       Alert.alert('Success', 'Game Ended!');
       
     } catch (error) {
@@ -556,7 +559,7 @@ useEffect(() => {
           
           {/* Game Info */}
           <View style={styles.gameInfo}>
-            <Text style={styles.gameText}>🏈 {currentGame}</Text>
+            <Text style={styles.gameText}>🏈 {currentGameId !== null ? currentGame : null}</Text>
             <Text style={[styles.statusBadge, 
               predictionStatus === 'Predictions OPEN' ? styles.openStatus : styles.closedStatus
             ]}>
