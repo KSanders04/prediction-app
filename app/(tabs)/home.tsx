@@ -119,7 +119,7 @@ useEffect(() => {
   }
 };
 
-
+/*
   const togglePlaying = useCallback(() => {
     setIsVideoPlaying((prev) => !prev);
   }, []);
@@ -135,6 +135,7 @@ useEffect(() => {
     return '';
   }
 };
+*/
 
   // USER MANAGEMENT FUNCTIONS
   const initializeUser = useCallback(async () => {
@@ -402,6 +403,28 @@ useEffect(() => {
     return unsubscribe;
   }, [currentQuestionId]);
 
+
+interface SharedVideoPlayerProps {
+  url: string;
+  isPlaying: boolean;
+  toggle: () => void;
+  onStateChange: (state: "unstarted" | "ended" | "playing" | "paused" | "buffering" | "cued") => void;
+}
+
+const SharedVideoPlayer: React.FC<SharedVideoPlayerProps> = ({ url, isPlaying, toggle, onStateChange }) => {
+  if (!url) return null;
+  return (
+    <View>
+      <YoutubePlayer
+        height={220}
+        play={isPlaying}
+        videoId={getURLID(url)}
+        onChangeState={onStateChange}
+      />
+    </View>
+  );
+};
+
   return (
     <SafeAreaView style={styles.app}>
       {/* View Toggle */}
@@ -466,11 +489,11 @@ useEffect(() => {
           {currentGameURL !== "" && (
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Game Play</Text>
-              <YoutubePlayer
-                height={200}
-                play={isVideoPlaying}
-                videoId={getURLID(currentGameURL)}
-                onChangeState={onVideoStateChange}
+              <SharedVideoPlayer 
+                url={currentGameURL}
+                isPlaying={isVideoPlaying}
+                toggle={togglePlaying}
+                onStateChange={onVideoStateChange}
               />
               <TouchableOpacity style={styles.primaryButton} onPress={togglePlaying}>
                 <Text style={styles.buttonText}>▶️ {isVideoPlaying ? "Pause" : "Play"}</Text>
@@ -555,12 +578,12 @@ useEffect(() => {
         >
           <Text style={styles.title}>🎯 MAKE PREDICTION</Text>
           {currentGameURL !== "" && (
-              <YoutubePlayer
-                  height={240}
-                  play={isVideoPlaying}
-                  videoId={getURLID(currentGameURL)}
-                  onChangeState={onVideoStateChange}
-                />
+              <SharedVideoPlayer 
+              url={currentGameURL}
+              isPlaying={isVideoPlaying}
+              toggle={togglePlaying}
+              onStateChange={onVideoStateChange}
+            />
             )}
           
           {/* Game Info */}
@@ -731,6 +754,7 @@ useEffect(() => {
     </SafeAreaView>
   );
 }
+
 
 const styles = StyleSheet.create({
   app: {
