@@ -26,9 +26,7 @@ import {
   onSnapshot,
   Timestamp
 } from 'firebase/firestore';
-import { WebView } from 'react-native-webview'
 import YoutubePlayer from 'react-native-youtube-iframe'
-import YoutubeIframe from 'react-native-youtube-iframe';
 
 // Types
 interface Guess {
@@ -464,6 +462,14 @@ export default function Home() {
           {/* Game Info */}
           <View style={styles.gameInfo}>
             <Text style={styles.gameText}>🏈 {currentGame}</Text>
+            {currentGameURL !== "" && (
+              <YoutubePlayer
+                  height={200}
+                  play={isVideoPlaying}
+                  videoId={getURLID(currentGameURL)}
+                  onChangeState={onVideoStateChange}
+                />
+            )}
             <Text style={[styles.statusBadge, 
               predictionStatus === 'Predictions OPEN' ? styles.openStatus : styles.closedStatus
             ]}>
