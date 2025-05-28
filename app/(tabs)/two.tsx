@@ -10,7 +10,8 @@ import {
 } from 'react-native';
 
 // Import Firebase configuration
-import { db } from '../../firebaseConfig';
+import { auth, db } from '../../firebaseConfig';
+import { onAuthStateChanged } from 'firebase/auth';
 import { 
   collection, 
   query, 
@@ -19,14 +20,17 @@ import {
   getDocs, 
   doc,
   getDoc,
+  setDoc,
   onSnapshot,
   Timestamp
 } from 'firebase/firestore';
+import { router } from 'expo-router';
 
 // Types
 interface User {
   id: string;
   name: string;
+  email?: string;
   totalPoints: number;
   gamesPlayed: number;
   correctPredictions: number;
@@ -39,18 +43,32 @@ export default function LeaderboardScreen() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  
-  // Generate same player ID as in home.tsx
-  const [playerId] = useState('Player_' + Math.random().toString(36).substr(2, 6));
+  const [authUser, setAuthUser] = useState<any>(null);
+  const [playerId, setPlayerId] = useState<string>('');
+
+  // Check authentication first
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        setAuthUser(user);
+        setPlayerId(user.uid); // Use actual user ID
+      } else {
+        router.replace('/login'); // Redirect if not logged in
+      }
+    });
+    return unsubscribe;
+  }, []);
 
   useEffect(() => {
-    loadLeaderboard();
-    loadCurrentUser();
-    
-    // Set up real-time listener for leaderboard
-    const unsubscribe = setupRealtimeLeaderboard();
-    return () => unsubscribe();
-  }, []);
+    if (playerId) {
+      loadLeaderboard();
+      loadCurrentUser();
+      
+      // Set up real-time listener for leaderboard
+      const unsubscribe = setupRealtimeLeaderboard();
+      return () => unsubscribe();
+    }
+  }, [playerId]);
 
   const loadLeaderboard = async () => {
     try {
@@ -65,7 +83,17 @@ export default function LeaderboardScreen() {
       const users: User[] = [];
       
       snapshot.forEach((doc) => {
-        users.push({ id: doc.id, ...doc.data() } as User);
+        const userData = doc.data();
+        users.push({ 
+          id: doc.id, 
+          name: userData.email || userData.name || userData.uid || `User_${doc.id.slice(0, 6)}`,
+          email: userData.email,
+          totalPoints: userData.totalPoints || 0,
+          gamesPlayed: userData.gamesPlayed || 0,
+          correctPredictions: userData.correctPredictions || 0,
+          totalPredictions: userData.totalPredictions || 0,
+          lastPlayed: userData.lastPlayed || new Date()
+        } as User);
       });
       
       setLeaderboard(users);
@@ -77,12 +105,44 @@ export default function LeaderboardScreen() {
   };
 
   const loadCurrentUser = async () => {
+    if (!playerId) return;
+    
     try {
       const userRef = doc(db, "users", playerId);
       const userSnap = await getDoc(userRef);
       
       if (userSnap.exists()) {
-        setCurrentUser({ id: userSnap.id, ...userSnap.data() } as User);
+        const userData = userSnap.data();
+        setCurrentUser({ 
+          id: userSnap.id, 
+          name: userData.email || userData.name || userData.uid || `User_${userSnap.id.slice(0, 6)}`,
+          email: userData.email,
+          totalPoints: userData.totalPoints || 0,
+          gamesPlayed: userData.gamesPlayed || 0,
+          correctPredictions: userData.correctPredictions || 0,
+          totalPredictions: userData.totalPredictions || 0,
+          lastPlayed: userData.lastPlayed || new Date()
+        } as User);
+      } else {
+        // Create user document if it doesn't exist
+        const newUserData = {
+          email: authUser?.email,
+          name: authUser?.email || `User_${playerId.slice(0, 6)}`,
+          totalPoints: 0,
+          gamesPlayed: 0,
+          correctPredictions: 0,
+          totalPredictions: 0,
+          lastPlayed: new Date(),
+          createdAt: new Date(),
+          isAdmin: null
+        };
+        
+        await setDoc(userRef, newUserData);
+        setCurrentUser({
+          id: playerId,
+          ...newUserData,
+          lastPlayed: Timestamp.fromDate(new Date())
+        } as User);
       }
     } catch (error) {
       console.error("Error loading current user:", error);
@@ -99,7 +159,17 @@ export default function LeaderboardScreen() {
     return onSnapshot(leaderboardQuery, (snapshot) => {
       const users: User[] = [];
       snapshot.forEach((doc) => {
-        users.push({ id: doc.id, ...doc.data() } as User);
+        const userData = doc.data();
+        users.push({ 
+          id: doc.id, 
+          name: userData.email || userData.name || userData.uid || `User_${doc.id.slice(0, 6)}`,
+          email: userData.email,
+          totalPoints: userData.totalPoints || 0,
+          gamesPlayed: userData.gamesPlayed || 0,
+          correctPredictions: userData.correctPredictions || 0,
+          totalPredictions: userData.totalPredictions || 0,
+          lastPlayed: userData.lastPlayed || new Date()
+        } as User);
       });
       setLeaderboard(users);
       
@@ -146,6 +216,17 @@ export default function LeaderboardScreen() {
     return total > 0 ? Math.round((correct / total) * 100) : 0;
   };
 
+  // Show loading if not authenticated yet
+  if (!authUser || !playerId) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <Text style={styles.loadingText}>Loading...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView 
@@ -161,6 +242,7 @@ export default function LeaderboardScreen() {
         {currentUser && (
           <View style={styles.currentUserSection}>
             <Text style={styles.sectionTitle}>📊 Your Stats</Text>
+            <Text style={styles.userEmail}>{authUser?.email}</Text>
             <View style={styles.statsGrid}>
               <View style={styles.statCard}>
                 <Text style={styles.statValue}>{getCurrentUserRank() || '--'}</Text>
@@ -267,6 +349,11 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f5f7fa',
   },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   scrollView: {
     flex: 1,
   },
@@ -295,6 +382,13 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     marginBottom: 15,
     color: '#2c3e50',
+  },
+  userEmail: {
+    fontSize: 14,
+    color: '#7f8c8d',
+    textAlign: 'center',
+    marginBottom: 15,
+    fontStyle: 'italic',
   },
   statsGrid: {
     flexDirection: 'row',
