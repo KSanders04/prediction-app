@@ -560,6 +560,8 @@ useEffect(() => {
 
             <Text style={styles.gameText}>🏈 {currentGameId !== null ? currentGame : null}</Text>
 
+            <Text style={styles.gameText}>🏈 {currentGameId !== null ? currentGame : null}</Text>
+
             <Text style={styles.gameText}>🏈 {currentGame}</Text>
             {currentGameURL !== "" && (
               <YoutubePlayer
@@ -569,6 +571,7 @@ useEffect(() => {
                   onChangeState={onVideoStateChange}
                 />
             )}
+
 
             <Text style={[styles.statusBadge, 
               predictionStatus === 'Predictions OPEN' ? styles.openStatus : styles.closedStatus
