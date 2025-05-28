@@ -554,25 +554,18 @@ useEffect(() => {
           showsVerticalScrollIndicator={false}
         >
           <Text style={styles.title}>🎯 MAKE PREDICTION</Text>
-          
-          {/* Game Info */}
-          <View style={styles.gameInfo}>
-
-            <Text style={styles.gameText}>🏈 {currentGameId !== null ? currentGame : null}</Text>
-
-            <Text style={styles.gameText}>🏈 {currentGameId !== null ? currentGame : null}</Text>
-
-            <Text style={styles.gameText}>🏈 {currentGame}</Text>
-            {currentGameURL !== "" && (
+          {currentGameURL !== "" && (
               <YoutubePlayer
-                  height={200}
+                  height={240}
                   play={isVideoPlaying}
                   videoId={getURLID(currentGameURL)}
                   onChangeState={onVideoStateChange}
                 />
             )}
-
-
+          
+          {/* Game Info */}
+          <View style={styles.gameInfo}>
+            <Text style={styles.gameText}>🏈 {currentGame}</Text>
             <Text style={[styles.statusBadge, 
               predictionStatus === 'Predictions OPEN' ? styles.openStatus : styles.closedStatus
             ]}>
