@@ -1,4 +1,4 @@
-// app/(tabs)/home.tsx - COMPLETE VERSION WITH KEYBOARD FIX
+// app/(tabs)/home.tsx 
 import React, { useState, useCallback, useEffect } from 'react';
 import {
   View,
@@ -11,22 +11,21 @@ import {
   SafeAreaView,
 } from 'react-native';
 
-// Import your Firebase configuration
-import { db } from '../../firebaseConfig';
+// Import irebase configuration
+import { auth, db } from '../../firebaseConfig';
+import { onAuthStateChanged } from 'firebase/auth';
 import { 
   collection, 
   addDoc, 
   query, 
   where, 
   orderBy,
-  getDocs,
-  getDoc,
-  setDoc, 
+  getDocs, 
   updateDoc, 
   doc,
   onSnapshot,
   Timestamp,
-  increment
+  getDoc
 } from 'firebase/firestore';
 
 // Types
@@ -38,15 +37,6 @@ interface Guess {
   timestamp: Timestamp;
 }
 
-interface User {
-  name: string;
-  totalPoints: number;
-  gamesPlayed: number;
-  correctPredictions: number;
-  totalPredictions: number;
-  lastPlayed: Timestamp;
-}
-
 export default function Home() {
   // State variables
   const [currentView, setCurrentView] = useState<'player' | 'admin'>('admin');
@@ -56,19 +46,14 @@ export default function Home() {
   const [currentGame, setCurrentGame] = useState('No game active');
   const [currentQuestion, setCurrentQuestion] = useState('Waiting for question...');
   const [predictionStatus, setPredictionStatus] = useState('Waiting...');
-  const [gamePhase, setGamePhase] = useState<'waiting' | 'predicting' | 'playing' | 'results'>('waiting');
   const [userPrediction, setUserPrediction] = useState('');
   const [allGuesses, setAllGuesses] = useState<Guess[]>([]);
   const [questionOptions, setQuestionOptions] = useState<string[]>([]);
   const [correctAnswer, setCorrectAnswer] = useState('Not set');
+  const [isAdminAccount, setIsAdminAccount] = useState<boolean | null>(null)
   
   // Generate unique player ID
   const [playerId] = useState('Player_' + Math.random().toString(36).substr(2, 6));
-
-  // Initialize user when component mounts
-  useEffect(() => {
-    initializeUser();
-  }, []);
 
   // Load real-time data when question changes
   useEffect(() => {
@@ -78,6 +63,29 @@ export default function Home() {
     }
   }, [currentQuestionId]);
 
+useEffect(() => {
+  const unsubscribe = onAuthStateChanged(auth, async (user) => {
+    if (user) {
+      const userRef = doc(db, 'users', user.uid);
+      const userSnap = await getDoc(userRef);
+
+      if (userSnap.exists()) {
+        const data = userSnap.data();
+        if (data.isAdmin !== null) {
+          setIsAdminAccount(data.isAdmin);
+          console.log('User isAdmin:', data.isAdmin);
+        } else {
+          console.log('isAdmin is null');
+        }
+      }
+    } else {
+      setIsAdminAccount(null); // or false, depending on your logic
+    }
+  });
+
+  return () => unsubscribe(); // cleanup
+}, []);
+
   // MEMOIZED HANDLERS (prevents re-renders)
   const handleGameNameChange = useCallback((text: string) => {
     setGameName(text);
@@ -85,47 +93,6 @@ export default function Home() {
 
   const handleViewChange = useCallback((view: 'player' | 'admin') => {
     setCurrentView(view);
-  }, []);
-
-  // USER MANAGEMENT FUNCTIONS
-  const initializeUser = useCallback(async () => {
-    try {
-      const userRef = doc(db, "users", playerId);
-      const userSnap = await getDoc(userRef);
-      
-      if (!userSnap.exists()) {
-        // Create new user
-        await setDoc(userRef, {
-          name: playerId,
-          totalPoints: 0,
-          gamesPlayed: 0,
-          correctPredictions: 0,
-          totalPredictions: 0,
-          lastPlayed: new Date()
-        });
-      }
-    } catch (error) {
-      console.error("Error initializing user:", error);
-    }
-  }, [playerId]);
-
-  const updateUserStats = useCallback(async (userId: string, isCorrect: boolean, gameId: string) => {
-    try {
-      const userRef = doc(db, "users", userId);
-      const updates: any = {
-        totalPredictions: increment(1),
-        lastPlayed: new Date()
-      };
-
-      if (isCorrect) {
-        updates.correctPredictions = increment(1);
-        updates.totalPoints = increment(10); // 10 points per correct prediction
-      }
-
-      await updateDoc(userRef, updates);
-    } catch (error) {
-      console.error("Error updating user stats:", error);
-    }
   }, []);
 
   // ADMIN FUNCTIONS
@@ -182,7 +149,6 @@ export default function Home() {
         question: questionData.text,
         options: questionData.options,
         status: "active",
-        phase: "predicting",  // New field
         actual_result: null,
         createdAt: new Date()
       });
@@ -191,7 +157,6 @@ export default function Home() {
       setCurrentQuestion(questionData.text);
       setQuestionOptions(questionData.options);
       setPredictionStatus('Predictions OPEN');
-      setGamePhase('predicting');  // New state
       setUserPrediction('');
       
       Alert.alert('Success', `Question created: ${questionData.text}`);
@@ -210,19 +175,36 @@ export default function Home() {
 
     try {
       await updateDoc(doc(db, "predictions", currentQuestionId), {
-        status: "closed",
-        phase: "playing"  // Game is now happening
+        status: "closed"
       });
       
-      setPredictionStatus('Predictions CLOSED - Game in Progress');
-      setGamePhase('playing');
-      Alert.alert('Success', 'Predictions closed! Game is now in progress.');
+      setPredictionStatus('Predictions CLOSED');
+      Alert.alert('Success', 'Question closed!');
       
     } catch (error) {
       console.error("Error:", error);
       Alert.alert('Error', 'Failed to close question');
     }
   }, [currentQuestionId]);
+  const adminEndedGame = useCallback(async () => {
+    if (!currentGameId) {
+      Alert.alert('Error', 'No active game!');
+      return;
+    }
+
+    try {
+      await updateDoc(doc(db, "games", currentGameId), {
+        status: "closed"
+      });
+      
+      setCurrentGameId(null);
+      Alert.alert('Success', 'Game Ended!');
+      
+    } catch (error) {
+      console.error("Error:", error);
+      Alert.alert('Error', 'Failed to close game');
+    }
+  }, [currentGameId]);
 
   const adminSetAnswer = useCallback(async (answer: string) => {
     if (!currentQuestionId) {
@@ -233,14 +215,12 @@ export default function Home() {
     try {
       await updateDoc(doc(db, "predictions", currentQuestionId), {
         actual_result: answer,
-        status: "finished",
-        phase: "results"  // Now showing results
+        status: "finished"
       });
       
       setCorrectAnswer(answer);
       setPredictionStatus('Results Available');
-      setGamePhase('results');
-      Alert.alert('Success', `Answer set to: ${answer}. Results are now visible!`);
+      Alert.alert('Success', `Answer set to: ${answer}`);
       
     } catch (error) {
       console.error("Error:", error);
@@ -263,51 +243,25 @@ export default function Home() {
 
       let winners = 0;
       let total = 0;
-      const updatePromises: Promise<void>[] = [];
 
       snapshot.forEach((doc) => {
         const guess = doc.data();
         total++;
-        const isCorrect = guess.prediction === correctAnswer;
-        
-        if (isCorrect) {
+        if (guess.prediction === correctAnswer) {
           winners++;
         }
-
-        // Update user stats for each player
-        updatePromises.push(updateUserStats(guess.playerId, isCorrect, currentGameId || ''));
       });
-
-      // Update game as played for current user if they participated
-      const currentUserGuess = allGuesses.find(guess => guess.playerId === playerId);
-      if (currentUserGuess) {
-        updatePromises.push(updateGamePlayedCount(playerId));
-      }
-
-      // Execute all updates
-      await Promise.all(updatePromises);
 
       Alert.alert(
         'Results', 
-        `🏆 FINAL RESULTS 🏆\n\nCorrect Answer: ${correctAnswer}\nWinners: ${winners} out of ${total} players\n\nAccuracy: ${total > 0 ? Math.round((winners/total) * 100) : 0}%\n\n✨ Leaderboard updated!`
+        `🏆 FINAL RESULTS 🏆\n\nCorrect Answer: ${correctAnswer}\nWinners: ${winners} out of ${total} players\n\nAccuracy: ${total > 0 ? Math.round((winners/total) * 100) : 0}%`
       );
       
     } catch (error) {
       console.error("Error:", error);
       Alert.alert('Error', 'Failed to calculate winners');
     }
-  }, [currentQuestionId, correctAnswer, currentGameId, playerId, allGuesses, updateUserStats]);
-
-  const updateGamePlayedCount = useCallback(async (userId: string) => {
-    try {
-      const userRef = doc(db, "users", userId);
-      await updateDoc(userRef, {
-        gamesPlayed: increment(1)
-      });
-    } catch (error) {
-      console.error("Error updating games played:", error);
-    }
-  }, []);
+  }, [currentQuestionId, correctAnswer]);
 
   // PLAYER FUNCTIONS
   const playerMakePrediction = useCallback(async (choice: string) => {
@@ -344,8 +298,8 @@ export default function Home() {
 
     const guessesQuery = query(
       collection(db, "guesses"),
-      where("questionId", "==", currentQuestionId)
-      // Removed orderBy to avoid index requirement
+      where("questionId", "==", currentQuestionId),
+      orderBy("timestamp", "asc")
     );
 
     const unsubscribe = onSnapshot(guessesQuery, (snapshot) => {
@@ -353,8 +307,6 @@ export default function Home() {
       snapshot.forEach((doc) => {
         guesses.push({ id: doc.id, ...doc.data() } as Guess);
       });
-      // Sort in JavaScript instead
-      guesses.sort((a, b) => a.timestamp.seconds - b.timestamp.seconds);
       setAllGuesses(guesses);
     });
 
@@ -365,14 +317,14 @@ export default function Home() {
     <SafeAreaView style={styles.app}>
       {/* View Toggle */}
       <View style={styles.toggleContainer}>
-        <TouchableOpacity 
+        {isAdminAccount !== null ? <TouchableOpacity 
           style={[styles.toggleButton, currentView === 'admin' && styles.activeToggle]}
           onPress={() => handleViewChange('admin')}
         >
           <Text style={[styles.toggleText, currentView === 'admin' && styles.activeToggleText]}>
             👨‍💼 Admin
           </Text>
-        </TouchableOpacity>
+        </TouchableOpacity> : null}
         <TouchableOpacity 
           style={[styles.toggleButton, currentView === 'player' && styles.activeToggle]}
           onPress={() => handleViewChange('player')}
@@ -383,7 +335,7 @@ export default function Home() {
         </TouchableOpacity>
       </View>
 
-      {currentView === 'admin' ? (
+      {isAdminAccount !== null ? (currentView === 'admin' ? (
         // ADMIN VIEW
         <ScrollView 
           style={styles.container}
@@ -438,8 +390,11 @@ export default function Home() {
             <TouchableOpacity style={styles.dangerButton} onPress={adminCloseQuestion}>
               <Text style={styles.buttonText}>🛑 Close Predictions</Text>
             </TouchableOpacity>
+              {currentGameId !== null ? <TouchableOpacity style={styles.dangerButton} onPress={adminEndedGame}>
+              <Text style={styles.buttonText}>🛑 End Game</Text>
+            </TouchableOpacity>: null}
             
-            <Text style={styles.subTitle}>Set Answer (only after real play happens):</Text>
+            <Text style={styles.subTitle}>Set Answer:</Text>
             {questionOptions.map((option, index) => (
               <TouchableOpacity 
                 key={`answer-${option}-${index}`}
@@ -465,9 +420,7 @@ export default function Home() {
             <Text style={styles.statusText}>👥 Total Predictions: {allGuesses.length}</Text>
           </View>
         </ScrollView>
-      ) : (
-        // PLAYER VIEW
-        <ScrollView 
+      ): <ScrollView 
           style={styles.container}
           keyboardShouldPersistTaps="always"
           showsVerticalScrollIndicator={false}
@@ -476,7 +429,7 @@ export default function Home() {
           
           {/* Game Info */}
           <View style={styles.gameInfo}>
-            <Text style={styles.gameText}>🏈 {currentGame}</Text>
+            <Text style={styles.gameText}>🏈 {currentGameId !== null ? currentGame : null}</Text>
             <Text style={[styles.statusBadge, 
               predictionStatus === 'Predictions OPEN' ? styles.openStatus : styles.closedStatus
             ]}>
@@ -500,10 +453,6 @@ export default function Home() {
                 </Text>
               </TouchableOpacity>
             ))}
-            
-            {predictionStatus === 'Predictions CLOSED - Game in Progress' && (
-              <Text style={styles.closedText}>🏈 Game in progress! Wait for results...</Text>
-            )}
             
             {predictionStatus === 'Predictions CLOSED' && (
               <Text style={styles.closedText}>🛑 Predictions are closed. Waiting for results...</Text>
@@ -532,23 +481,108 @@ export default function Home() {
                 return (
                   <View key={`guess-${guess.id}-${index}`} style={[
                     styles.guessItem,
-                    // Only show win/loss colors if results are revealed
-                    gamePhase === 'results' && isCorrect && styles.correctGuess,
-                    gamePhase === 'results' && isWrong && styles.wrongGuess,
+                    isCorrect && styles.correctGuess,
+                    isWrong && styles.wrongGuess,
                     isCurrentUser && styles.currentUserGuess
                   ]}>
                     <Text style={styles.guessText}>
                       {isCurrentUser ? '👤 You' : guess.playerId}: {guess.prediction}
-                      {gamePhase === 'results' && isCorrect && ' ✅'}
-                      {gamePhase === 'results' && isWrong && ' ❌'}
-                      {gamePhase !== 'results' && ' ⏳'}
+                      {isCorrect && ' ✅'}
+                      {isWrong && ' ❌'}
+                      {correctAnswer === 'Not set' && ' ⏳'}
                     </Text>
                   </View>
                 );
               })
             )}
             
-            {correctAnswer !== 'Not set' && gamePhase === 'results' && (
+            {correctAnswer !== 'Not set' && (
+              <View style={styles.correctAnswerBox}>
+                <Text style={styles.correctAnswerText}>
+                  🎯 Correct Answer: {correctAnswer}
+                </Text>
+              </View>
+            )}
+          </View>
+        </ScrollView>) : (
+        // PLAYER VIEW
+        <ScrollView 
+          style={styles.container}
+          keyboardShouldPersistTaps="always"
+          showsVerticalScrollIndicator={false}
+        >
+          <Text style={styles.title}>🎯 MAKE PREDICTION</Text>
+          
+          {/* Game Info */}
+          <View style={styles.gameInfo}>
+            <Text style={styles.gameText}>🏈 {currentGameId !== null ? currentGame : null}</Text>
+            <Text style={[styles.statusBadge, 
+              predictionStatus === 'Predictions OPEN' ? styles.openStatus : styles.closedStatus
+            ]}>
+              {predictionStatus}
+            </Text>
+          </View>
+
+          {/* Question */}
+          <View style={styles.questionSection}>
+            <Text style={styles.questionText}>{currentQuestion}</Text>
+            
+            {/* Prediction Buttons */}
+            {predictionStatus === 'Predictions OPEN' && questionOptions.map((option, index) => (
+              <TouchableOpacity 
+                key={`predict-${option}-${index}`}
+                style={[styles.predictButton, userPrediction === option && styles.selectedButton]} 
+                onPress={() => playerMakePrediction(option)}
+              >
+                <Text style={styles.buttonText}>
+                  {option} {userPrediction === option && '✓'}
+                </Text>
+              </TouchableOpacity>
+            ))}
+            
+            {predictionStatus === 'Predictions CLOSED' && (
+              <Text style={styles.closedText}>🛑 Predictions are closed. Waiting for results...</Text>
+            )}
+            
+            {userPrediction !== '' && (
+              <View style={styles.userChoiceContainer}>
+                <Text style={styles.userChoice}>Your prediction: {userPrediction}</Text>
+              </View>
+            )}
+          </View>
+
+          {/* All Guesses */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>
+              👥 All Predictions ({allGuesses.length})
+            </Text>
+            {allGuesses.length === 0 ? (
+              <Text style={styles.noGuessesText}>No predictions yet. Be the first!</Text>
+            ) : (
+              allGuesses.map((guess, index) => {
+                const isCorrect = correctAnswer !== 'Not set' && guess.prediction === correctAnswer;
+                const isWrong = correctAnswer !== 'Not set' && guess.prediction !== correctAnswer;
+                const isCurrentUser = guess.playerId === playerId;
+                
+                return (
+                  <View key={`guess-${guess.id}-${index}`} style={[
+                    styles.guessItem,
+                    isCorrect && styles.correctGuess,
+                    isWrong && styles.wrongGuess,
+                    isCurrentUser && styles.currentUserGuess
+                  ]}>
+                    <Text style={styles.guessText}>
+                      {isCurrentUser ? '👤 You' : guess.playerId}: {guess.prediction}
+                      {isCorrect && ' ✅'}
+                      {isWrong && ' ❌'}
+                      {correctAnswer === 'Not set' && ' ⏳'}
+                    </Text>
+                  </View>
+                );
+              })
+            )}
+            
+            {correctAnswer !== 'Not set' && (
               <View style={styles.correctAnswerBox}>
                 <Text style={styles.correctAnswerText}>
                   🎯 Correct Answer: {correctAnswer}
