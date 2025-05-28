@@ -199,7 +199,17 @@ export default function LeaderboardScreen() {
 
   const formatLastPlayed = (timestamp: Timestamp): string => {
     const now = new Date();
-    const lastPlayed = timestamp.toDate();
+    let lastPlayed
+    if (timestamp && typeof timestamp.toDate === 'function') {
+      lastPlayed = timestamp.toDate();
+    } else if (timestamp instanceof Date) {
+        lastPlayed = timestamp
+    } else if (typeof timestamp === 'string') {
+      lastPlayed = new Date(timestamp)
+    } else {
+      lastPlayed = null
+    }
+    
     const diffInMinutes = Math.floor((now.getTime() - lastPlayed.getTime()) / (1000 * 60));
     
     if (diffInMinutes < 1) return 'Just now';
