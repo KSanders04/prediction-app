@@ -26,7 +26,9 @@ import {
   doc,
   onSnapshot,
   Timestamp,
-  getDoc
+  getDoc,
+  setDoc,
+  increment
 } from 'firebase/firestore';
 import YoutubePlayer from 'react-native-youtube-iframe'
 
