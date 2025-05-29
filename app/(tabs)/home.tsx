@@ -45,6 +45,26 @@ interface Guess {
   timestamp: Timestamp;
 }
 
+// ===== NEW: Question Template Interface =====
+// This matches the professor's diagram structure
+interface QuestionTemplate {
+  id: string;
+  text: string; // Question text template
+  options: Array<{
+    optionText: string;
+    optionPicture?: string; // Optional image for option
+    optionVideo?: string;   // Optional video for option
+  }>;
+  type: string; // "field_goal", "coin_flip", "next_play"
+  createdAt?: Date;
+  updatedAt?: Date;
+}
+
+interface Game {
+  name: string;
+  status: string;
+}
+
 export default function Home() {
   // State variables
   const [currentView, setCurrentView] = useState<'player' | 'admin' | 'games'>('player');
@@ -69,6 +89,89 @@ export default function Home() {
   const [currentGameURL, setCurrentGameURL] = useState('');
   const [isVideoPlaying, setIsVideoPlaying] = useState(true);
 
+  // ===== NEW: Question Template State =====
+  const [questionTemplates, setQuestionTemplates] = useState<QuestionTemplate[]>([]);
+
+  // ===== NEW: Initialize Question Templates Function =====
+  // This creates the questionTemplates collection in Firebase if it doesn't exist
+  const initializeQuestionTemplates = useCallback(async () => {
+    try {
+      console.log('🔧 Checking for existing question templates...');
+      
+      // Check if questionTemplates collection exists and has data
+      const templatesSnapshot = await getDocs(collection(db, "questionTemplates"));
+      
+      if (templatesSnapshot.empty) {
+        console.log('📝 No templates found, creating default templates...');
+        
+        // ===== CREATE DEFAULT TEMPLATES =====
+        // These match your current hardcoded questions but stored in Firebase
+        const defaultTemplates = [
+          {
+            text: "Will the field goal be MADE or MISSED?",
+            options: [
+              { optionText: "MADE" },
+              { optionText: "MISSED" }
+            ],
+            type: "field_goal",
+            createdAt: new Date(),
+            updatedAt: new Date()
+          },
+          {
+            text: "Coin flip: HEADS or TAILS?",
+            options: [
+              { optionText: "HEADS" },
+              { optionText: "TAILS" }
+            ],
+            type: "coin_flip",
+            createdAt: new Date(),
+            updatedAt: new Date()
+          },
+          {
+            text: "Next play: RUSH or PASS?",
+            options: [
+              { optionText: "RUSH" },
+              { optionText: "PASS" }
+            ],
+            type: "next_play",
+            createdAt: new Date(),
+            updatedAt: new Date()
+          }
+        ];
+
+        // Add each template to Firebase questionTemplates collection
+        for (const template of defaultTemplates) {
+          await addDoc(collection(db, "questionTemplates"), template);
+          console.log(`✅ Created template: ${template.type}`);
+        }
+        
+        Alert.alert('Success', 'Question templates initialized in Firebase!');
+      } else {
+        console.log('✅ Templates already exist in Firebase');
+      }
+    } catch (error) {
+      console.error("❌ Error initializing templates:", error);
+    }
+  }, []);
+
+  // ===== NEW: Load Templates from Firebase =====
+  const loadQuestionTemplates = useCallback(async () => {
+    try {
+      console.log('📥 Loading question templates from Firebase...');
+      const templatesSnapshot = await getDocs(collection(db, "questionTemplates"));
+      const templates: QuestionTemplate[] = [];
+      
+      templatesSnapshot.forEach((doc) => {
+        templates.push({ id: doc.id, ...doc.data() } as QuestionTemplate);
+      });
+      
+      setQuestionTemplates(templates);
+      console.log(`✅ Loaded ${templates.length} templates from Firebase`);
+    } catch (error) {
+      console.error("❌ Error loading templates:", error);
+    }
+  }, []);
+
   // Check authentication and get user data
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
@@ -88,6 +191,10 @@ export default function Home() {
           setIsAdminAccount(data.isAdmin === true); // Check if user is admin
           console.log('User isAdmin:', data.isAdmin);
           console.log('User data:', data);
+          
+          // ===== NEW: Initialize and Load Templates After User Authentication =====
+          await initializeQuestionTemplates();
+          await loadQuestionTemplates();
         } else {
           console.log('User document does not exist');
           setIsAdminAccount(false);
@@ -100,9 +207,9 @@ export default function Home() {
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [initializeQuestionTemplates, loadQuestionTemplates]); // Add dependencies
 
-  // ===== NEW: REAL-TIME GAME AND QUESTION LISTENER =====
+  // ===== EXISTING: REAL-TIME GAME AND QUESTION LISTENER =====
   // This makes ALL players see the same game/question across devices
   useEffect(() => {
     if (!playerId) return; // Wait for user to be authenticated
@@ -152,7 +259,7 @@ export default function Home() {
     };
   }, [playerId]); // Run when playerId changes (user logs in)
 
-  // ===== NEW: Listen for active questions in real-time =====
+  // ===== EXISTING: Listen for active questions in real-time =====
   const listenForActiveQuestions = useCallback((gameId: string) => {
     console.log('Setting up real-time question listener for game:', gameId);
     
@@ -205,7 +312,7 @@ export default function Home() {
     return unsubscribeQuestions;
   }, [playerId]);
 
-  // ===== NEW: Check if user already made a prediction =====
+  // ===== EXISTING: Check if user already made a prediction =====
   const checkUserPrediction = useCallback(async (questionId: string) => {
     if (!playerId) return;
     
@@ -357,9 +464,9 @@ export default function Home() {
     }
   }, []);
 
-  // ===== MODIFIED: ADMIN FUNCTIONS FOR MULTI-DEVICE SUPPORT =====
+  // ===== EXISTING: ADMIN FUNCTIONS FOR MULTI-DEVICE SUPPORT =====
   
-  // MODIFIED: Ensure only one active game at a time
+  // EXISTING: Ensure only one active game at a time
   const adminCreateGame = useCallback(async () => {
     if (!gameName.trim()) {
       Alert.alert('Error', 'Please enter a game name!');
@@ -413,43 +520,32 @@ export default function Home() {
     }
   }, [gameName, gameURL, playerId]);
 
-  // MODIFIED: Ensure only one active question per game
-  const adminCreateQuestion = useCallback(async (questionType: string) => {
+  // ===== NEW: Create Question from Template Function =====
+  // This replaces the hardcoded question creation with template-based creation
+  const adminCreateQuestionFromTemplate = useCallback(async (templateType: string) => {
     if (!currentGameId) {
       Alert.alert('Error', 'Create a game first!');
       return;
     }
 
-    const questions: { [key: string]: { text: string; options: string[] } } = {
-      FIELD_GOAL: {
-        text: "Will the field goal be MADE or MISSED?",
-        options: ["MADE", "MISSED"]
-      },
-      COIN_FLIP: {
-        text: "Coin flip: HEADS or TAILS?", 
-        options: ["HEADS", "TAILS"]
-      },
-      NEXT_PLAY: {
-        text: "Next play: RUSH or PASS?",
-        options: ["RUSH", "PASS"]
-      }
-    };
-
-    const questionData = questions[questionType];
+    // Find the template by type
+    const template = questionTemplates.find(t => t.type === templateType);
+    if (!template) {
+      Alert.alert('Error', 'Template not found!');
+      return;
+    }
 
     try {
-      console.log('Creating new question and closing any existing active questions');
+      console.log('🎯 Creating question from template:', template.type);
       
-      // ADDED: First, close any existing active questions in this game
+      // ===== CLOSE EXISTING ACTIVE QUESTIONS =====
       const activeQuestionsQuery = query(
-        collection(db, "questions"), // CHANGED: using "questions" instead of "predictions"
+        collection(db, "questions"),
         where("gameId", "==", currentGameId),
         where("status", "==", "active")
       );
       
       const activeQuestionsSnapshot = await getDocs(activeQuestionsQuery);
-      
-      // Close all active questions
       const closePromises = activeQuestionsSnapshot.docs.map(doc => 
         updateDoc(doc.ref, { status: "finished" })
       );
@@ -459,32 +555,28 @@ export default function Home() {
         console.log('Closed', closePromises.length, 'existing active questions');
       }
 
-      // Now create the new question
-      const docRef = await addDoc(collection(db, "questions"), { // CHANGED: using "questions"
+      // ===== CREATE NEW QUESTION USING TEMPLATE DATA =====
+      const docRef = await addDoc(collection(db, "questions"), {
         gameId: currentGameId,
-        question: questionData.text,
-        options: questionData.options,
+        templateId: template.id, // ⭐ Store reference to template (KEY PART!)
+        question: template.text, // Use template text
+        options: template.options.map(opt => opt.optionText), // Extract option text
         status: "active",
         actual_result: null,
         createdAt: new Date(),
-        createdBy: playerId // Track who created the question
+        createdBy: playerId
       });
       
-      // REMOVED: Manual state setting since real-time listener will handle this
-      // setCurrentQuestionId(docRef.id);
-      // setCurrentQuestion(questionData.text);
-      // setQuestionOptions(questionData.options);
-      // setPredictionStatus('Predictions OPEN');
-      // setUserPrediction('');
-      // setCorrectAnswer('Not set');
-      
-      Alert.alert('Success', `Question created: ${questionData.text}. All players can now see this question!`);
+      Alert.alert('Success', `Question created from template: ${template.type}! All players can see it.`);
       
     } catch (error) {
-      console.error("Error creating question:", error);
+      console.error("❌ Error creating question from template:", error);
       Alert.alert('Error', 'Failed to create question');
     }
-  }, [currentGameId, playerId]);
+  }, [currentGameId, playerId, questionTemplates]);
+
+  // ===== REMOVED: Old hardcoded question creation - not needed anymore =====
+  // The adminCreateQuestion function has been completely removed since templates handle this better
 
   const adminCloseQuestion = useCallback(async () => {
     if (!currentQuestionId) {
@@ -497,8 +589,6 @@ export default function Home() {
         status: "closed"
       });
       
-      // REMOVED: Manual state setting since real-time listener will handle this
-      // setPredictionStatus('Predictions CLOSED');
       Alert.alert('Success', 'Question closed for all players!');
       
     } catch (error) {
@@ -507,12 +597,7 @@ export default function Home() {
     }
   }, [currentQuestionId]);
 
-
-interface Game {
-  name: string;
-  status: string;
-}
-
+  // ===== EXISTING: Games functionality =====
   const fetchActiveGames = useCallback(async () => {
     try {
       const gamesRef = collection(db, 'games');
@@ -533,30 +618,30 @@ interface Game {
     }
   }, []);
 
-const joinGameButton = useCallback(async (gameName: string) => {
-  try {
-    const gamesRef = collection(db, 'games');
-    const q = query(gamesRef, where('name', '==', gameName));
-    const querySnapshot = await getDocs(q);
+  const joinGameButton = useCallback(async (gameName: string) => {
+    try {
+      const gamesRef = collection(db, 'games');
+      const q = query(gamesRef, where('name', '==', gameName));
+      const querySnapshot = await getDocs(q);
 
-    if (!querySnapshot.empty) {
-      // Get the first matching document's data
-      const docData = querySnapshot.docs[0].data();
-      if (docData.url) {
-        setCurrentGameURL(docData.url);
-        setCurrentGameId(docData.videoId)
-        setCurrentGame(gameName)
-        console.log('attempting to change game')
+      if (!querySnapshot.empty) {
+        // Get the first matching document's data
+        const docData = querySnapshot.docs[0].data();
+        if (docData.url) {
+          setCurrentGameURL(docData.url);
+          setCurrentGameId(docData.videoId)
+          setCurrentGame(gameName)
+          console.log('attempting to change game')
+        } else {
+          console.log(`No URL found for game ${gameName}`);
+        }
       } else {
-        console.log(`No URL found for game ${gameName}`);
+        console.log(`Game not found: ${gameName}`);
       }
-    } else {
-      console.log(`Game not found: ${gameName}`);
+    } catch (error) {
+      console.error('Error fetching game URL:', error);
     }
-  } catch (error) {
-    console.error('Error fetching game URL:', error);
-  }
-}, []);
+  }, []);
 
   useEffect(() => {
     fetchActiveGames();
@@ -567,7 +652,6 @@ const joinGameButton = useCallback(async (gameName: string) => {
     await fetchActiveGames();
     setRefreshing(false);
   };
-
 
   const adminEndedGame = useCallback(async () => {
     console.log('=== END GAME CLICKED ===');
@@ -599,10 +683,6 @@ const joinGameButton = useCallback(async (gameName: string) => {
       });
 
       console.log('Game status updated successfully');
-
-      // REMOVED: Manual state reset since real-time listener will handle this
-      // All the setCurrentGameId(null), setCurrentGame('No game active'), etc.
-      // will be handled by the real-time listener when it detects no active games
       
       Alert.alert('Success', 'Game ended for all players! Everything has been reset.');
       
@@ -624,9 +704,6 @@ const joinGameButton = useCallback(async (gameName: string) => {
         status: "finished"
       });
       
-      // REMOVED: Manual state setting since real-time listener will handle this
-      // setCorrectAnswer(answer);
-      // setPredictionStatus('Results Available');
       Alert.alert('Success', `Answer set to: ${answer}. All players can now see the results!`);
       
     } catch (error) {
@@ -726,11 +803,6 @@ const joinGameButton = useCallback(async (gameName: string) => {
         playerEmail: currentUser?.email, // Store email for reference
         timestamp: new Date()
       });
-
-
-      // REMOVED: Manual state setting since checkUserPrediction will handle this
-      // setUserPrediction(choice);
-
     }
       setUserPrediction(choice);
 
@@ -773,8 +845,6 @@ const joinGameButton = useCallback(async (gameName: string) => {
       </SafeAreaView>
     );
   }
-
-  
 
   return (
     <SafeAreaView style={styles.app}>
@@ -829,14 +899,13 @@ const joinGameButton = useCallback(async (gameName: string) => {
 
       {isAdminAccount && currentView === 'admin' ? (
         // ADMIN VIEW
-        
         <ScrollView 
           style={styles.container}
           keyboardShouldPersistTaps="always"
-                  refreshControl={
-                    <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-                  }
-                  showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          }
+          showsVerticalScrollIndicator={false}
         >
           
           <Text style={styles.title}>🔧 ADMIN PANEL</Text>
@@ -899,28 +968,32 @@ const joinGameButton = useCallback(async (gameName: string) => {
             </View>
           )}
 
-          {/* Create Questions */}
+          {/* ===== CLEAN: Create Questions from Templates ===== */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Step 2: Create Question</Text>
-            <TouchableOpacity 
-              style={styles.adminButton} 
-              onPress={() => adminCreateQuestion('FIELD_GOAL')}
-            >
-              <Text style={styles.buttonText}>🥅 Field Goal Question</Text>
-            </TouchableOpacity>
-            <TouchableOpacity 
-              style={styles.adminButton} 
-              onPress={() => adminCreateQuestion('COIN_FLIP')}
-            >
-              <Text style={styles.buttonText}>🪙 Coin Flip Question</Text>
-            </TouchableOpacity>
-            <TouchableOpacity 
-              style={styles.adminButton} 
-              onPress={() => adminCreateQuestion('NEXT_PLAY')}
-            >
-              <Text style={styles.buttonText}>🏈 Next Play Question</Text>
-            </TouchableOpacity>
+            
+            {/* Question Creation Buttons */}
+            {questionTemplates.length === 0 ? (
+              <Text style={styles.statusText}>📥 Loading templates...</Text>
+            ) : (
+              questionTemplates.map((template) => (
+                <TouchableOpacity 
+                  key={template.id}
+                  style={styles.adminButton} 
+                  onPress={() => adminCreateQuestionFromTemplate(template.type)}
+                >
+                  <Text style={styles.buttonText}>
+                    {template.type === 'field_goal' && '🥅 '}
+                    {template.type === 'coin_flip' && '🪙 '}
+                    {template.type === 'next_play' && '🏈 '}
+                    {template.text}
+                  </Text>
+                </TouchableOpacity>
+              ))
+            )}
           </View>
+
+
 
           {/* Control Game */}
           <View style={styles.section}>
@@ -966,40 +1039,33 @@ const joinGameButton = useCallback(async (gameName: string) => {
       ) : ( (currentView === 'games' ? <ScrollView 
           style={styles.container}
           keyboardShouldPersistTaps="always"
-                  refreshControl={
-                    <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-                  }
-                  showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          }
+          showsVerticalScrollIndicator={false}
         >
           <Text style={styles.title}>📃 Select A Game</Text>
           <Text style={styles.welcomeText}>Welcome, {currentUser?.email}!</Text>
           {gameNames.map((name, index) => (
-  <TouchableOpacity
-    key={index}
-    style={styles.dangerButton}
-    onPress={() => joinGameButton(name)} // put join function here
-    activeOpacity={0.7}
-  >
-    <Text style={styles.buttonText}>{name}</Text>
-  </TouchableOpacity>
-))}
-          
-          {/* Game Info */}
-
-
-          
-
-          {/* All Guesses */}
+            <TouchableOpacity
+              key={index}
+              style={styles.dangerButton}
+              onPress={() => joinGameButton(name)}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.buttonText}>{name}</Text>
+            </TouchableOpacity>
+          ))}
         </ScrollView> :   
 
         // PLAYER VIEW
         <ScrollView 
           style={styles.container}
           keyboardShouldPersistTaps="always"
-                  refreshControl={
-                    <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-                  }
-                  showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          }
+          showsVerticalScrollIndicator={false}
         >
           <Text style={styles.title}>🎯 MAKE PREDICTION</Text>
           <Text style={styles.welcomeText}>Welcome, {currentUser?.email}!</Text>
@@ -1097,7 +1163,7 @@ const joinGameButton = useCallback(async (gameName: string) => {
   );
 }
 
-
+// ===== COMPLETE STYLES WITH NEW TEMPLATE STYLES =====
 const styles = StyleSheet.create({
   app: {
     flex: 1,
@@ -1366,5 +1432,14 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#856404',
     textAlign: 'center',
+  },
+  // ===== NEW: Template Management Styles =====
+  templateInfo: {
+    backgroundColor: '#f8f9fa',
+    padding: 15,
+    borderRadius: 10,
+    marginTop: 10,
+    borderLeftWidth: 4,
+    borderLeftColor: '#17a2b8',
   },
 });
