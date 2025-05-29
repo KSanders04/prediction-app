@@ -10,6 +10,7 @@ import {
   Alert,
   SafeAreaView,
   Button,
+  RefreshControl,
 } from 'react-native';
 
 // Import firebase configuration
@@ -47,6 +48,7 @@ interface Guess {
 export default function Home() {
   // State variables
   const [currentView, setCurrentView] = useState<'player' | 'admin' | 'games'>('player');
+  const [gameNames, setGameNames] = useState<string[]>([]);
   const [currentGameId, setCurrentGameId] = useState<string | null>(null);
   const [currentQuestionId, setCurrentQuestionId] = useState<string | null>(null);
   const [gameName, setGameName] = useState('');
@@ -61,6 +63,7 @@ export default function Home() {
   const [isAdminAccount, setIsAdminAccount] = useState<boolean | null>(null);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [playerId, setPlayerId] = useState<string>('');
+  const [refreshing, setRefreshing] = useState(false);
 
   const [gameURL, setGameURL] = useState('');
   const [currentGameURL, setCurrentGameURL] = useState('');
@@ -504,6 +507,43 @@ export default function Home() {
     }
   }, [currentQuestionId]);
 
+
+interface Game {
+  name: string;
+  status: string;
+}
+
+  const fetchActiveGames = useCallback(async () => {
+    try {
+      const gamesRef = collection(db, 'games');
+      const q = query(gamesRef, where('status', '==', 'active'));
+      const querySnapshot = await getDocs(q);
+
+      const names: string[] = [];
+      querySnapshot.forEach((doc) => {
+        const data = doc.data();
+        if (data.name) {
+          names.push(data.name);
+        }
+      });
+
+      setGameNames(names);
+    } catch (error) {
+      console.error('Error fetching active games:', error);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchActiveGames();
+  }, [fetchActiveGames]);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await fetchActiveGames();
+    setRefreshing(false);
+  };
+
+
   const adminEndedGame = useCallback(async () => {
     console.log('=== END GAME CLICKED ===');
     console.log('Current Game ID:', currentGameId);
@@ -713,6 +753,7 @@ export default function Home() {
 
   return (
     <SafeAreaView style={styles.app}>
+      
       {/* View Toggle - only show if user is admin */}
       {isAdminAccount === true ? (
         <View style={styles.toggleContainer}>
@@ -763,11 +804,16 @@ export default function Home() {
 
       {isAdminAccount && currentView === 'admin' ? (
         // ADMIN VIEW
+        
         <ScrollView 
           style={styles.container}
           keyboardShouldPersistTaps="always"
-          showsVerticalScrollIndicator={false}
+                  refreshControl={
+                    <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+                  }
+                  showsVerticalScrollIndicator={false}
         >
+          
           <Text style={styles.title}>🔧 ADMIN PANEL</Text>
           <Text style={styles.welcomeText}>Welcome, {currentUser?.email}!</Text>
           
@@ -895,10 +941,23 @@ export default function Home() {
       ) : ( (currentView === 'games' ? <ScrollView 
           style={styles.container}
           keyboardShouldPersistTaps="always"
-          showsVerticalScrollIndicator={false}
+                  refreshControl={
+                    <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+                  }
+                  showsVerticalScrollIndicator={false}
         >
           <Text style={styles.title}>📃 Select A Game</Text>
           <Text style={styles.welcomeText}>Welcome, {currentUser?.email}!</Text>
+          {gameNames.map((name, index) => (
+  <TouchableOpacity
+    key={index}
+    style={styles.dangerButton}
+    onPress={() => console.log(`Pressed game: ${name}`)} // put join function here
+    activeOpacity={0.7}
+  >
+    <Text style={styles.buttonText}>{name}</Text>
+  </TouchableOpacity>
+))}
           
           {/* Game Info */}
 
@@ -912,7 +971,10 @@ export default function Home() {
         <ScrollView 
           style={styles.container}
           keyboardShouldPersistTaps="always"
-          showsVerticalScrollIndicator={false}
+                  refreshControl={
+                    <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+                  }
+                  showsVerticalScrollIndicator={false}
         >
           <Text style={styles.title}>🎯 MAKE PREDICTION</Text>
           <Text style={styles.welcomeText}>Welcome, {currentUser?.email}!</Text>
