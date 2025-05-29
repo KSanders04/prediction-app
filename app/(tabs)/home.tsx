@@ -533,6 +533,31 @@ interface Game {
     }
   }, []);
 
+const joinGameButton = useCallback(async (gameName: string) => {
+  try {
+    const gamesRef = collection(db, 'games');
+    const q = query(gamesRef, where('name', '==', gameName));
+    const querySnapshot = await getDocs(q);
+
+    if (!querySnapshot.empty) {
+      // Get the first matching document's data
+      const docData = querySnapshot.docs[0].data();
+      if (docData.url) {
+        setCurrentGameURL(docData.url);
+        setCurrentGameId(docData.videoId)
+        setCurrentGame(gameName)
+        console.log('attempting to change game')
+      } else {
+        console.log(`No URL found for game ${gameName}`);
+      }
+    } else {
+      console.log(`Game not found: ${gameName}`);
+    }
+  } catch (error) {
+    console.error('Error fetching game URL:', error);
+  }
+}, []);
+
   useEffect(() => {
     fetchActiveGames();
   }, [fetchActiveGames]);
@@ -952,7 +977,7 @@ interface Game {
   <TouchableOpacity
     key={index}
     style={styles.dangerButton}
-    onPress={() => console.log(`Pressed game: ${name}`)} // put join function here
+    onPress={() => joinGameButton(name)} // put join function here
     activeOpacity={0.7}
   >
     <Text style={styles.buttonText}>{name}</Text>
