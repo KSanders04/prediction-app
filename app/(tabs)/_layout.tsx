@@ -67,7 +67,7 @@ export default function TabLayout() {
       />
       <Tabs.Screen
         name="signout"
-        options={{
+        options={{ href: null,
           title: 'Sign Out',
           tabBarIcon: ({ color }) => <TabBarIcon name="sign-out" color={color} />,
           headerRight: () => (

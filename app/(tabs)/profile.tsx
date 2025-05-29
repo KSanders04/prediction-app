@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { StyleSheet, View, Text, Image, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
-import { auth, db,storage} from '../../firebaseConfig'; // adjust path to your config
+import { auth, db, storage} from '../../firebaseConfig'; // adjust path to your config
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import * as ImagePicker from 'expo-image-picker';
+import SignOut from './signout'
 
 
 export default function Profile() {
@@ -94,13 +95,14 @@ export default function Profile() {
             }
             style={styles.profileImage}
           />
+          <TouchableOpacity style={styles.button} onPress={pickImageAndUpload}>
+            <Text style={styles.buttonText}>Change Profile Picture</Text>
+          </TouchableOpacity>
 
           <Text style={styles.name}>{userData.name}</Text>
           <Text style={styles.id}>ID: {userData.id}</Text>
 
-          <TouchableOpacity style={styles.button} onPress={pickImageAndUpload}>
-            <Text style={styles.buttonText}>Change Profile Picture</Text>
-          </TouchableOpacity>
+          <SignOut />
         </>
       )}
     </View>
@@ -127,6 +129,7 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: 'bold',
     color: '#2c3e50',
+    paddingTop: 10,
   },
   id: {
     fontSize: 14,
