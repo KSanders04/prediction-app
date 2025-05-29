@@ -99,6 +99,137 @@ export default function Home() {
     return () => unsubscribe();
   }, []);
 
+  // ===== NEW: REAL-TIME GAME AND QUESTION LISTENER =====
+  // This makes ALL players see the same game/question across devices
+  useEffect(() => {
+    if (!playerId) return; // Wait for user to be authenticated
+    
+    console.log('Setting up real-time listeners for all games and questions');
+    
+    // Listen for active games in real-time
+    const gamesQuery = query(
+      collection(db, "games"),
+      where("status", "==", "active")
+    );
+
+    const unsubscribeGames = onSnapshot(gamesQuery, (snapshot) => {
+      if (!snapshot.empty) {
+        // Get the first (and should be only) active game
+        const gameDoc = snapshot.docs[0];
+        const gameData = gameDoc.data();
+        
+        console.log('Found active game:', gameData.name);
+        
+        // Set the current game info for ALL players (admin and regular players)
+        setCurrentGameId(gameDoc.id);
+        setCurrentGame(gameData.name);
+        setCurrentGameURL(gameData.url || '');
+        
+        // Now listen for active questions in this game
+        listenForActiveQuestions(gameDoc.id);
+      } else {
+        console.log('No active games found - resetting everything');
+        // Reset everything if no active games
+        setCurrentGameId(null);
+        setCurrentGame('No game active');
+        setCurrentGameURL('');
+        setCurrentQuestionId(null);
+        setCurrentQuestion('Waiting for question...');
+        setPredictionStatus('Waiting...');
+        setQuestionOptions([]);
+        setCorrectAnswer('Not set');
+        setUserPrediction('');
+        setAllGuesses([]);
+      }
+    });
+
+    return () => {
+      console.log('Cleaning up real-time game listeners');
+      unsubscribeGames();
+    };
+  }, [playerId]); // Run when playerId changes (user logs in)
+
+  // ===== NEW: Listen for active questions in real-time =====
+  const listenForActiveQuestions = useCallback((gameId: string) => {
+    console.log('Setting up real-time question listener for game:', gameId);
+    
+    const questionsQuery = query(
+      collection(db, "questions"), // CHANGED: using "questions" instead of "predictions"
+      where("gameId", "==", gameId),
+      where("status", "in", ["active", "closed", "finished"]),
+      orderBy("createdAt", "desc"),
+      limit(1) // Get only the most recent question
+    );
+
+    const unsubscribeQuestions = onSnapshot(questionsQuery, (snapshot) => {
+      if (!snapshot.empty) {
+        const questionDoc = snapshot.docs[0];
+        const questionData = questionDoc.data();
+        
+        console.log('Found question:', questionData.question);
+        console.log('Question status:', questionData.status);
+        
+        // Update question info for ALL players
+        setCurrentQuestionId(questionDoc.id);
+        setCurrentQuestion(questionData.question);
+        setQuestionOptions(questionData.options || []);
+        setCorrectAnswer(questionData.actual_result || 'Not set');
+        
+        // Set prediction status based on question status
+        if (questionData.status === "active") {
+          setPredictionStatus('Predictions OPEN');
+        } else if (questionData.status === "closed") {
+          setPredictionStatus('Predictions CLOSED');
+        } else if (questionData.status === "finished") {
+          setPredictionStatus('Results Available');
+        }
+        
+        // Check if current user already made a prediction for this question
+        checkUserPrediction(questionDoc.id);
+        
+      } else {
+        console.log('No questions found for this game');
+        setCurrentQuestionId(null);
+        setCurrentQuestion('Waiting for question...');
+        setPredictionStatus('Waiting...');
+        setQuestionOptions([]);
+        setCorrectAnswer('Not set');
+        setUserPrediction('');
+        setAllGuesses([]);
+      }
+    });
+
+    return unsubscribeQuestions;
+  }, [playerId]);
+
+  // ===== NEW: Check if user already made a prediction =====
+  const checkUserPrediction = useCallback(async (questionId: string) => {
+    if (!playerId) return;
+    
+    console.log('Checking if user already predicted for question:', questionId);
+    
+    try {
+      const userGuessQuery = query(
+        collection(db, "guesses"),
+        where("questionId", "==", questionId),
+        where("playerId", "==", playerId)
+      );
+      
+      const snapshot = await getDocs(userGuessQuery);
+      
+      if (!snapshot.empty) {
+        const userGuess = snapshot.docs[0].data();
+        setUserPrediction(userGuess.prediction);
+        console.log('User already predicted:', userGuess.prediction);
+      } else {
+        setUserPrediction('');
+        console.log('User has not predicted yet');
+      }
+    } catch (error) {
+      console.error('Error checking user prediction:', error);
+    }
+  }, [playerId]);
+
   // Load real-time data when question changes
   useEffect(() => {
     if (currentQuestionId) {
@@ -223,7 +354,9 @@ export default function Home() {
     }
   }, []);
 
-  // ADMIN FUNCTIONS
+  // ===== MODIFIED: ADMIN FUNCTIONS FOR MULTI-DEVICE SUPPORT =====
+  
+  // MODIFIED: Ensure only one active game at a time
   const adminCreateGame = useCallback(async () => {
     if (!gameName.trim()) {
       Alert.alert('Error', 'Please enter a game name!');
@@ -231,6 +364,27 @@ export default function Home() {
     }
 
     try {
+      console.log('Creating new game and closing any existing active games');
+      
+      // ADDED: First, close any existing active games to prevent conflicts
+      const activeGamesQuery = query(
+        collection(db, "games"),
+        where("status", "==", "active")
+      );
+      
+      const activeGamesSnapshot = await getDocs(activeGamesQuery);
+      
+      // Close all active games
+      const closePromises = activeGamesSnapshot.docs.map(doc => 
+        updateDoc(doc.ref, { status: "closed", endedAt: new Date() })
+      );
+      
+      if (closePromises.length > 0) {
+        await Promise.all(closePromises);
+        console.log('Closed', closePromises.length, 'existing active games');
+      }
+
+      // Now create the new game
       const videoID = getURLID(gameURL);
       const docRef = await addDoc(collection(db, "games"), {
         name: gameName,
@@ -241,12 +395,14 @@ export default function Home() {
         createdBy: playerId // Track who created the game
       });
       
-      setCurrentGameId(docRef.id);
-      setCurrentGame(gameName);
-      setCurrentGameURL(gameURL);
+      // REMOVED: Manual state setting since real-time listener will handle this
+      // setCurrentGameId(docRef.id);
+      // setCurrentGame(gameName);
+      // setCurrentGameURL(gameURL);
+      
       setGameName('');
       setGameURL('');
-      Alert.alert('Success', `Game created: ${gameName}`);
+      Alert.alert('Success', `Game created: ${gameName}. All players can now see this game!`);
       
     } catch (error) {
       console.error("Error creating game:", error);
@@ -254,6 +410,7 @@ export default function Home() {
     }
   }, [gameName, gameURL, playerId]);
 
+  // MODIFIED: Ensure only one active question per game
   const adminCreateQuestion = useCallback(async (questionType: string) => {
     if (!currentGameId) {
       Alert.alert('Error', 'Create a game first!');
@@ -278,8 +435,29 @@ export default function Home() {
     const questionData = questions[questionType];
 
     try {
-      // CHANGED: "predictions" to "questions"
-      const docRef = await addDoc(collection(db, "questions"), {
+      console.log('Creating new question and closing any existing active questions');
+      
+      // ADDED: First, close any existing active questions in this game
+      const activeQuestionsQuery = query(
+        collection(db, "questions"), // CHANGED: using "questions" instead of "predictions"
+        where("gameId", "==", currentGameId),
+        where("status", "==", "active")
+      );
+      
+      const activeQuestionsSnapshot = await getDocs(activeQuestionsQuery);
+      
+      // Close all active questions
+      const closePromises = activeQuestionsSnapshot.docs.map(doc => 
+        updateDoc(doc.ref, { status: "finished" })
+      );
+      
+      if (closePromises.length > 0) {
+        await Promise.all(closePromises);
+        console.log('Closed', closePromises.length, 'existing active questions');
+      }
+
+      // Now create the new question
+      const docRef = await addDoc(collection(db, "questions"), { // CHANGED: using "questions"
         gameId: currentGameId,
         question: questionData.text,
         options: questionData.options,
@@ -289,14 +467,15 @@ export default function Home() {
         createdBy: playerId // Track who created the question
       });
       
-      setCurrentQuestionId(docRef.id);
-      setCurrentQuestion(questionData.text);
-      setQuestionOptions(questionData.options);
-      setPredictionStatus('Predictions OPEN');
-      setUserPrediction('');
-      setCorrectAnswer('Not set');
+      // REMOVED: Manual state setting since real-time listener will handle this
+      // setCurrentQuestionId(docRef.id);
+      // setCurrentQuestion(questionData.text);
+      // setQuestionOptions(questionData.options);
+      // setPredictionStatus('Predictions OPEN');
+      // setUserPrediction('');
+      // setCorrectAnswer('Not set');
       
-      Alert.alert('Success', `Question created: ${questionData.text}`);
+      Alert.alert('Success', `Question created: ${questionData.text}. All players can now see this question!`);
       
     } catch (error) {
       console.error("Error creating question:", error);
@@ -311,13 +490,13 @@ export default function Home() {
     }
 
     try {
-      // CHANGED: "predictions" to "questions"
-      await updateDoc(doc(db, "questions", currentQuestionId), {
+      await updateDoc(doc(db, "questions", currentQuestionId), { // CHANGED: using "questions"
         status: "closed"
       });
       
-      setPredictionStatus('Predictions CLOSED');
-      Alert.alert('Success', 'Question closed!');
+      // REMOVED: Manual state setting since real-time listener will handle this
+      // setPredictionStatus('Predictions CLOSED');
+      Alert.alert('Success', 'Question closed for all players!');
       
     } catch (error) {
       console.error("Error:", error);
@@ -353,33 +532,14 @@ export default function Home() {
         endedAt: new Date(),
         endedBy: playerId
       });
-      
 
       console.log('Game status updated successfully');
 
-      setCurrentGameId(null);
-      setCurrentGameURL("");
-      setGameURL("");
-      setIsVideoPlaying(false);
-      Alert.alert('Success', 'Game Ended!');
+      // REMOVED: Manual state reset since real-time listener will handle this
+      // All the setCurrentGameId(null), setCurrentGame('No game active'), etc.
+      // will be handled by the real-time listener when it detects no active games
       
-      
-      // COMPLETE RESET - Clear everything
-      setCurrentGameId(null);
-      setCurrentGame('No game active');
-      setCurrentGameURL('');
-      setIsVideoPlaying(false);
-      setCurrentQuestionId(null);
-      setCurrentQuestion('Waiting for question...');
-      setPredictionStatus('Waiting...');
-      setQuestionOptions([]);
-      setCorrectAnswer('Not set');
-      setUserPrediction('');
-      setAllGuesses([]); // Clear all predictions
-      setGameName('');
-      setGameURL('');
-      
-      Alert.alert('Success', 'Game Ended! Everything has been reset.');
+      Alert.alert('Success', 'Game ended for all players! Everything has been reset.');
       
     } catch (error: any) {
       console.error("Error ending game:", error);
@@ -394,15 +554,15 @@ export default function Home() {
     }
 
     try {
-      // CHANGED: "predictions" to "questions"
-      await updateDoc(doc(db, "questions", currentQuestionId), {
+      await updateDoc(doc(db, "questions", currentQuestionId), { // CHANGED: using "questions"
         actual_result: answer,
         status: "finished"
       });
       
-      setCorrectAnswer(answer);
-      setPredictionStatus('Results Available');
-      Alert.alert('Success', `Answer set to: ${answer}`);
+      // REMOVED: Manual state setting since real-time listener will handle this
+      // setCorrectAnswer(answer);
+      // setPredictionStatus('Results Available');
+      Alert.alert('Success', `Answer set to: ${answer}. All players can now see the results!`);
       
     } catch (error) {
       console.error("Error:", error);
@@ -455,7 +615,7 @@ export default function Home() {
     }
   }, [currentQuestionId, correctAnswer, currentGameId, updateUserStats]);
 
-  // PLAYER FUNCTIONS
+  // PLAYER FUNCTIONS (unchanged)
   const playerMakePrediction = useCallback(async (choice: string) => {
     if (!currentQuestionId) {
       Alert.alert('Error', 'No active question!');
@@ -472,6 +632,12 @@ export default function Home() {
       return;
     }
 
+    // ADDED: Check if user already made a prediction
+    if (userPrediction !== '') {
+      Alert.alert('Error', 'You have already made a prediction for this question!');
+      return;
+    }
+
     try {
       await addDoc(collection(db, "guesses"), {
         prediction: choice,
@@ -481,16 +647,17 @@ export default function Home() {
         timestamp: new Date()
       });
 
-      setUserPrediction(choice);
+      // REMOVED: Manual state setting since checkUserPrediction will handle this
+      // setUserPrediction(choice);
       Alert.alert('Success', `Your prediction: ${choice} has been submitted!`);
       
     } catch (error) {
       console.error("Error:", error);
       Alert.alert('Error', 'Failed to submit prediction');
     }
-  }, [currentQuestionId, predictionStatus, playerId, currentUser]);
+  }, [currentQuestionId, predictionStatus, playerId, currentUser, userPrediction]);
 
-  // Real-time data loading
+  // Real-time data loading (unchanged)
   const loadGuessesRealTime = useCallback(() => {
     if (!currentQuestionId) return;
 
@@ -716,6 +883,7 @@ export default function Home() {
                 key={`predict-${option}-${index}`}
                 style={[styles.predictButton, userPrediction === option && styles.selectedButton]} 
                 onPress={() => playerMakePrediction(option)}
+                disabled={userPrediction !== ''} // ADDED: Disable if user already predicted
               >
                 <Text style={styles.buttonText}>
                   {option} {userPrediction === option && '✓'}
