@@ -550,6 +550,16 @@ export default function Home() {
               👨‍💼 Admin
             </Text>
           </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={[styles.toggleButton, currentView === 'player' && styles.activeToggle]}
+            onPress={() => handleViewChange('player')}
+          >
+            <Text style={[styles.toggleText, currentView === 'player' && styles.activeToggleText]}>
+               📃 Games
+            </Text>
+          </TouchableOpacity>
+
           <TouchableOpacity 
             style={[styles.toggleButton, currentView === 'player' && styles.activeToggle]}
             onPress={() => handleViewChange('player')}
