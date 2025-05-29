@@ -1,22 +1,10 @@
-import {
-  Text,
-  StyleSheet,
-  TextInput,
-  TouchableOpacity,
-  SafeAreaView,
-} from "react-native";
+import {Text,StyleSheet,TextInput,TouchableOpacity,SafeAreaView,} from "react-native";
 import React, { useState, useEffect } from "react";
 import { auth, db } from "../firebaseConfig";
-import {
-  createUserWithEmailAndPassword,
-  signInWithEmailAndPassword,
-} from "firebase/auth";
+import {createUserWithEmailAndPassword,signInWithEmailAndPassword} from "firebase/auth";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router } from "expo-router";
 import { doc, setDoc, getDoc } from 'firebase/firestore';
-
-
-
 
 const index = () => {
   const [email, setEmail] = useState(""); // set up states for the email and password originally just empty strings
@@ -70,7 +58,7 @@ const index = () => {
       }
     } catch (error: any) {
       console.log(error);
-      alert("Sign in failed: " + error.message);
+      alert("Sign up failed: " + error.message);
     }
   };
 
