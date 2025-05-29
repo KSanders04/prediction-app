@@ -46,7 +46,7 @@ interface Guess {
 
 export default function Home() {
   // State variables
-  const [currentView, setCurrentView] = useState<'player' | 'admin'>('player');
+  const [currentView, setCurrentView] = useState<'player' | 'admin' | 'games'>('player');
   const [currentGameId, setCurrentGameId] = useState<string | null>(null);
   const [currentQuestionId, setCurrentQuestionId] = useState<string | null>(null);
   const [gameName, setGameName] = useState('');
@@ -57,7 +57,7 @@ export default function Home() {
   const [allGuesses, setAllGuesses] = useState<Guess[]>([]);
   const [questionOptions, setQuestionOptions] = useState<string[]>([]);
   const [correctAnswer, setCorrectAnswer] = useState('Not set');
-
+  const [liveGames, setLiveGames] = useState<string[]>([]);
   const [isAdminAccount, setIsAdminAccount] = useState<boolean | null>(null);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [playerId, setPlayerId] = useState<string>('');
@@ -243,7 +243,7 @@ export default function Home() {
     setGameName(text);
   }, []);
 
-  const handleViewChange = useCallback((view: 'player' | 'admin') => {
+  const handleViewChange = useCallback((view: 'player' | 'admin' | 'games') => {
     setCurrentView(view);
   }, []);
 
@@ -709,10 +709,12 @@ export default function Home() {
     );
   }
 
+  
+
   return (
     <SafeAreaView style={styles.app}>
       {/* View Toggle - only show if user is admin */}
-      {isAdminAccount && (
+      {isAdminAccount === true ? (
         <View style={styles.toggleContainer}>
           <TouchableOpacity 
             style={[styles.toggleButton, currentView === 'admin' && styles.activeToggle]}
@@ -720,6 +722,14 @@ export default function Home() {
           >
             <Text style={[styles.toggleText, currentView === 'admin' && styles.activeToggleText]}>
               👨‍💼 Admin
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={[styles.toggleButton, currentView === 'games' && styles.activeToggle]}
+            onPress={() => handleViewChange('games')}
+          >
+            <Text style={[styles.toggleText, currentView === 'games' && styles.activeToggleText]}>
+               📃 Games
             </Text>
           </TouchableOpacity>
           <TouchableOpacity 
@@ -731,7 +741,25 @@ export default function Home() {
             </Text>
           </TouchableOpacity>
         </View>
-      )}
+      ) : <View style={styles.toggleContainer}>
+                  <TouchableOpacity 
+            style={[styles.toggleButton, currentView === 'games' && styles.activeToggle]}
+            onPress={() => handleViewChange('games')}
+          >
+            <Text style={[styles.toggleText, currentView === 'games' && styles.activeToggleText]}>
+               📃 Games
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={[styles.toggleButton, currentView === 'player' && styles.activeToggle]}
+            onPress={() => handleViewChange('player')}
+          >
+            <Text style={[styles.toggleText, currentView === 'player' && styles.activeToggleText]}>
+              🎯 Player
+            </Text>
+          </TouchableOpacity>
+        
+        </View>}
 
       {isAdminAccount && currentView === 'admin' ? (
         // ADMIN VIEW
@@ -864,7 +892,21 @@ export default function Home() {
           </View>
         </ScrollView>
 
-      ) : (
+      ) : ( (currentView === 'games' ? <ScrollView 
+          style={styles.container}
+          keyboardShouldPersistTaps="always"
+          showsVerticalScrollIndicator={false}
+        >
+          <Text style={styles.title}>📃 Select A Game</Text>
+          <Text style={styles.welcomeText}>Welcome, {currentUser?.email}!</Text>
+          
+          {/* Game Info */}
+
+
+          
+
+          {/* All Guesses */}
+        </ScrollView> :   
 
         // PLAYER VIEW
         <ScrollView 
@@ -962,7 +1004,7 @@ export default function Home() {
               </View>
             )}
           </View>
-        </ScrollView>
+        </ScrollView>)
       )}
     </SafeAreaView>
   );
