@@ -4,6 +4,7 @@ import { auth, db, storage} from '../../firebaseConfig'; // adjust path to your 
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import * as ImagePicker from 'expo-image-picker';
+import SignOut from './signout'
 
 
 export default function Profile() {
@@ -94,13 +95,14 @@ export default function Profile() {
             }
             style={styles.profileImage}
           />
+          <TouchableOpacity style={styles.button} onPress={pickImageAndUpload}>
+            <Text style={styles.buttonText}>Change Profile Picture</Text>
+          </TouchableOpacity>
 
           <Text style={styles.name}>{userData.name}</Text>
           <Text style={styles.id}>ID: {userData.id}</Text>
 
-          <TouchableOpacity style={styles.button} onPress={pickImageAndUpload}>
-            <Text style={styles.buttonText}>Change Profile Picture</Text>
-          </TouchableOpacity>
+          <SignOut />
         </>
       )}
     </View>
@@ -127,6 +129,7 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: 'bold',
     color: '#2c3e50',
+    paddingTop: 10,
   },
   id: {
     fontSize: 14,
