@@ -67,7 +67,7 @@ export default function Home() {
 
   const [gameURL, setGameURL] = useState('');
   const [currentGameURL, setCurrentGameURL] = useState('');
-  const [isVideoPlaying, setIsVideoPlaying] = useState(false);
+  const [isVideoPlaying, setIsVideoPlaying] = useState(true);
 
   // Check authentication and get user data
   useEffect(() => {
@@ -112,7 +112,7 @@ export default function Home() {
     // Listen for active games in real-time
     const gamesQuery = query(
       collection(db, "games"),
-      where("status", "==", "active")
+      where("status", "==", "active"),
     );
 
     const unsubscribeGames = onSnapshot(gamesQuery, (snapshot) => {
