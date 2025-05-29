@@ -278,7 +278,8 @@ export default function Home() {
     const questionData = questions[questionType];
 
     try {
-      const docRef = await addDoc(collection(db, "predictions"), {
+      // CHANGED: "predictions" to "questions"
+      const docRef = await addDoc(collection(db, "questions"), {
         gameId: currentGameId,
         question: questionData.text,
         options: questionData.options,
@@ -310,7 +311,8 @@ export default function Home() {
     }
 
     try {
-      await updateDoc(doc(db, "predictions", currentQuestionId), {
+      // CHANGED: "predictions" to "questions"
+      await updateDoc(doc(db, "questions", currentQuestionId), {
         status: "closed"
       });
       
@@ -392,7 +394,8 @@ export default function Home() {
     }
 
     try {
-      await updateDoc(doc(db, "predictions", currentQuestionId), {
+      // CHANGED: "predictions" to "questions"
+      await updateDoc(doc(db, "questions", currentQuestionId), {
         actual_result: answer,
         status: "finished"
       });
