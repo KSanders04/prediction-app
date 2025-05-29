@@ -639,6 +639,21 @@ export default function Home() {
     }
 
     try {
+      const guessQuery = query(
+      collection(db, "guesses"),
+      where("questionId", "==", currentQuestionId),
+      where("playerId", "==", playerId)
+    );
+    const guessSnapshot = await getDocs(guessQuery);
+
+    if (!guessSnapshot.empty) {
+      // Update the existing guess
+      const guessDoc = guessSnapshot.docs[0];
+      await updateDoc(doc(db, "guesses", guessDoc.id), {
+        prediction: choice,
+        timestamp: new Date()
+      });
+    } else {
       await addDoc(collection(db, "guesses"), {
         prediction: choice,
         questionId: currentQuestionId,
@@ -647,8 +662,13 @@ export default function Home() {
         timestamp: new Date()
       });
 
+
       // REMOVED: Manual state setting since checkUserPrediction will handle this
       // setUserPrediction(choice);
+
+    }
+      setUserPrediction(choice);
+
       Alert.alert('Success', `Your prediction: ${choice} has been submitted!`);
       
     } catch (error) {
@@ -762,6 +782,7 @@ export default function Home() {
                 videoId={getURLID(currentGameURL)}
                 onChangeState={onVideoStateChange}
               />
+            
               <TouchableOpacity style={styles.primaryButton} onPress={togglePlaying}>
                 <Text style={styles.buttonText}>▶️ {isVideoPlaying ? "Pause" : "Play"}</Text>
               </TouchableOpacity>
@@ -853,11 +874,8 @@ export default function Home() {
         >
           <Text style={styles.title}>🎯 MAKE PREDICTION</Text>
           <Text style={styles.welcomeText}>Welcome, {currentUser?.email}!</Text>
-          
-          {/* Game Info */}
-          <View style={styles.gameInfo}>
-            <Text style={styles.gameText}>🏈 {currentGame}</Text>
-            {currentGameURL !== "" && (
+
+          {currentGameURL !== "" && (
               <YoutubePlayer
                 height={200}
                 play={isVideoPlaying}
@@ -865,7 +883,10 @@ export default function Home() {
                 onChangeState={onVideoStateChange}
               />
             )}
-
+          
+          {/* Game Info */}
+          <View style={styles.gameInfo}>
+            <Text style={styles.gameText}>🏈 {currentGame}</Text>
             <Text style={[styles.statusBadge, 
               predictionStatus === 'Predictions OPEN' ? styles.openStatus : styles.closedStatus
             ]}>
@@ -946,6 +967,7 @@ export default function Home() {
     </SafeAreaView>
   );
 }
+
 
 const styles = StyleSheet.create({
   app: {
