@@ -473,6 +473,21 @@ export default function Home() {
     }
 
     try {
+      const guessQuery = query(
+      collection(db, "guesses"),
+      where("questionId", "==", currentQuestionId),
+      where("playerId", "==", playerId)
+    );
+    const guessSnapshot = await getDocs(guessQuery);
+
+    if (!guessSnapshot.empty) {
+      // Update the existing guess
+      const guessDoc = guessSnapshot.docs[0];
+      await updateDoc(doc(db, "guesses", guessDoc.id), {
+        prediction: choice,
+        timestamp: new Date()
+      });
+    } else {
       await addDoc(collection(db, "guesses"), {
         prediction: choice,
         questionId: currentQuestionId,
@@ -480,7 +495,7 @@ export default function Home() {
         playerEmail: currentUser?.email, // Store email for reference
         timestamp: new Date()
       });
-
+    }
       setUserPrediction(choice);
       Alert.alert('Success', `Your prediction: ${choice} has been submitted!`);
       
