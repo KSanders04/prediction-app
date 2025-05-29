@@ -3,13 +3,6 @@ import { auth } from '../../firebaseConfig';
 import { getAuth } from 'firebase/auth';
 import { router } from 'expo-router'
 export default function TabOneScreen() {
-
-
-
-
-
-
-
 getAuth().onAuthStateChanged((user) => {
   if (!user) router.replace('/'); // if user is not logged in return them to the login page
 });
