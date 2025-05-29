@@ -684,11 +684,8 @@ export default function Home() {
         >
           <Text style={styles.title}>🎯 MAKE PREDICTION</Text>
           <Text style={styles.welcomeText}>Welcome, {currentUser?.email}!</Text>
-          
-          {/* Game Info */}
-          <View style={styles.gameInfo}>
-            <Text style={styles.gameText}>🏈 {currentGame}</Text>
-            {currentGameURL !== "" && (
+
+          {currentGameURL !== "" && (
               <YoutubePlayer
                 height={200}
                 play={isVideoPlaying}
@@ -696,7 +693,10 @@ export default function Home() {
                 onChangeState={onVideoStateChange}
               />
             )}
-
+          
+          {/* Game Info */}
+          <View style={styles.gameInfo}>
+            <Text style={styles.gameText}>🏈 {currentGame}</Text>
             <Text style={[styles.statusBadge, 
               predictionStatus === 'Predictions OPEN' ? styles.openStatus : styles.closedStatus
             ]}>
