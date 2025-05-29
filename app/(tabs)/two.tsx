@@ -1,4 +1,4 @@
-// app/(tabs)/two.tsx
+// app/(tabs)/two.tsx  (Leaderboard section)
 import React, { useState, useEffect } from 'react';
 import {
   StyleSheet,
@@ -105,49 +105,49 @@ export default function LeaderboardScreen() {
   };
 
   const loadCurrentUser = async () => {
-    if (!playerId) return;
-    
-    try {
-      const userRef = doc(db, "users", playerId);
-      const userSnap = await getDoc(userRef);
-      
-      if (userSnap.exists()) {
-        const userData = userSnap.data();
-        setCurrentUser({ 
-          id: userSnap.id, 
-          name: userData.email || userData.name || userData.uid || `User_${userSnap.id.slice(0, 6)}`,
-          email: userData.email,
-          totalPoints: userData.totalPoints || 0,
-          gamesPlayed: userData.gamesPlayed || 0,
-          correctPredictions: userData.correctPredictions || 0,
-          totalPredictions: userData.totalPredictions || 0,
-          lastPlayed: userData.lastPlayed || new Date()
-        } as User);
-      } else {
-        // Create user document if it doesn't exist
-        const newUserData = {
-          email: authUser?.email,
-          name: authUser?.email || `User_${playerId.slice(0, 6)}`,
-          totalPoints: 0,
-          gamesPlayed: 0,
-          correctPredictions: 0,
-          totalPredictions: 0,
-          lastPlayed: new Date(),
-          createdAt: new Date(),
-          isAdmin: null
-        };
-        
-        await setDoc(userRef, newUserData);
-        setCurrentUser({
-          id: playerId,
-          ...newUserData,
-          lastPlayed: Timestamp.fromDate(new Date())
-        } as User);
-      }
-    } catch (error) {
-      console.error("Error loading current user:", error);
+  if (!playerId) return;
+
+  try {
+    const userRef = doc(db, "users", playerId);
+    const userSnap = await getDoc(userRef);
+
+    if (userSnap.exists()) {
+      const userData = userSnap.data();
+      setCurrentUser({ 
+        id: userSnap.id, 
+        name: userData.email || userData.name || userData.uid || `User_${userSnap.id.slice(0, 6)}`,
+        email: userData.email,
+        totalPoints: userData.totalPoints || 0,
+        gamesPlayed: userData.gamesPlayed || 0,
+        correctPredictions: userData.correctPredictions || 0,
+        totalPredictions: userData.totalPredictions || 0,
+        lastPlayed: userData.lastPlayed || new Date()
+      } as User);
+    } else {
+
+      const newUserData = {
+        email: authUser?.email,
+        name: authUser?.email || `User_${playerId.slice(0, 6)}`,
+        totalPoints: 0,
+        gamesPlayed: 0,
+        correctPredictions: 0,
+        totalPredictions: 0,
+        lastPlayed: Timestamp.fromDate(new Date()), 
+        createdAt: Timestamp.fromDate(new Date()),   
+        isAdmin: null
+      };
+
+      await setDoc(userRef, newUserData);
+      setCurrentUser({
+        id: playerId,
+        ...newUserData
+      } as User);
     }
-  };
+  } catch (error) {
+    console.error("Error loading current user:", error);
+  }
+};
+
 
   const setupRealtimeLeaderboard = () => {
     const leaderboardQuery = query(
@@ -197,16 +197,30 @@ export default function LeaderboardScreen() {
     }
   };
 
-  const formatLastPlayed = (timestamp: Timestamp): string => {
-    const now = new Date();
-    const lastPlayed = timestamp.toDate();
-    const diffInMinutes = Math.floor((now.getTime() - lastPlayed.getTime()) / (1000 * 60));
-    
-    if (diffInMinutes < 1) return 'Just now';
-    if (diffInMinutes < 60) return `${diffInMinutes}m ago`;
-    if (diffInMinutes < 1440) return `${Math.floor(diffInMinutes / 60)}h ago`;
-    return `${Math.floor(diffInMinutes / 1440)}d ago`;
-  };
+  const formatLastPlayed = (timestamp: any): string => {
+  const now = new Date();
+
+  // Convert Firestore Timestamp or string to JS Date
+  let lastPlayedDate: Date;
+
+  if (timestamp instanceof Timestamp) {
+    lastPlayedDate = timestamp.toDate();
+  } else if (timestamp instanceof Date) {
+    lastPlayedDate = timestamp;
+  } else if (typeof timestamp === 'string') {
+    lastPlayedDate = new Date(timestamp);
+  } else {
+    return 'Unknown';
+  }
+
+  const diffInMinutes = Math.floor((now.getTime() - lastPlayedDate.getTime()) / (1000 * 60));
+
+  if (diffInMinutes < 1) return 'Just now';
+  if (diffInMinutes < 60) return `${diffInMinutes}m ago`;
+  if (diffInMinutes < 1440) return `${Math.floor(diffInMinutes / 60)}h ago`;
+  return `${Math.floor(diffInMinutes / 1440)}d ago`;
+};
+
 
   const getCurrentUserRank = (): number => {
     return leaderboard.findIndex(user => user.id === playerId) + 1;
