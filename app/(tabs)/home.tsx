@@ -12,7 +12,7 @@ import {
   Button,
 } from 'react-native';
 
-// Import irebase configuration
+// Import firebase configuration
 import { auth, db } from '../../firebaseConfig';
 import { onAuthStateChanged } from 'firebase/auth';
 import { 
@@ -28,8 +28,10 @@ import {
   Timestamp,
   getDoc,
   setDoc,
-  increment
+  increment,
+  limit
 } from 'firebase/firestore';
+import { router } from 'expo-router';
 import YoutubePlayer from 'react-native-youtube-iframe'
 
 // Types
@@ -38,12 +40,13 @@ interface Guess {
   prediction: string;
   questionId: string;
   playerId: string;
+  playerEmail?: string; // Optional field for user email
   timestamp: Timestamp;
 }
 
 export default function Home() {
   // State variables
-  const [currentView, setCurrentView] = useState<'player' | 'admin'>('admin');
+  const [currentView, setCurrentView] = useState<'player' | 'admin'>('player');
   const [currentGameId, setCurrentGameId] = useState<string | null>(null);
   const [currentQuestionId, setCurrentQuestionId] = useState<string | null>(null);
   const [gameName, setGameName] = useState('');
@@ -55,15 +58,46 @@ export default function Home() {
   const [questionOptions, setQuestionOptions] = useState<string[]>([]);
   const [correctAnswer, setCorrectAnswer] = useState('Not set');
 
-  const [isAdminAccount, setIsAdminAccount] = useState<boolean | null>(null)
+  const [isAdminAccount, setIsAdminAccount] = useState<boolean | null>(null);
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [playerId, setPlayerId] = useState<string>('');
 
-  const [gameURL, setGameURL] = useState('')
-  const [currentGameURL, setCurrentGameURL] = useState('')
-  const [isVideoPlaying, setIsVideoPlaying] = useState(false)
+  const [gameURL, setGameURL] = useState('');
+  const [currentGameURL, setCurrentGameURL] = useState('');
+  const [isVideoPlaying, setIsVideoPlaying] = useState(false);
 
-  
-  // Generate unique player ID
-  const [playerId] = useState('Player_' + Math.random().toString(36).substr(2, 6));
+  // Check authentication and get user data
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        console.log('User authenticated:', user.uid, user.email);
+        setCurrentUser(user);
+        setPlayerId(user.uid); // Use actual user ID instead of random
+        
+        // Initialize user document
+        await initializeUser(user);
+        
+        const userRef = doc(db, 'users', user.uid);
+        const userSnap = await getDoc(userRef);
+
+        if (userSnap.exists()) {
+          const data = userSnap.data();
+          setIsAdminAccount(data.isAdmin === true); // Check if user is admin
+          console.log('User isAdmin:', data.isAdmin);
+          console.log('User data:', data);
+        } else {
+          console.log('User document does not exist');
+          setIsAdminAccount(false);
+        }
+      } else {
+        // User not logged in, redirect to login
+        console.log('User not authenticated, redirecting to login');
+        router.replace('/login');
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
 
   // Load real-time data when question changes
   useEffect(() => {
@@ -72,29 +106,6 @@ export default function Home() {
       return () => unsubscribe && unsubscribe();
     }
   }, [currentQuestionId]);
-
-useEffect(() => {
-  const unsubscribe = onAuthStateChanged(auth, async (user) => {
-    if (user) {
-      const userRef = doc(db, 'users', user.uid);
-      const userSnap = await getDoc(userRef);
-
-      if (userSnap.exists()) {
-        const data = userSnap.data();
-        if (data.isAdmin !== null) {
-          setIsAdminAccount(data.isAdmin);
-          console.log('User isAdmin:', data.isAdmin);
-        } else {
-          console.log('isAdmin is null');
-        }
-      }
-    } else {
-      setIsAdminAccount(null); // or false, depending on your logic
-    }
-  });
-
-  return () => unsubscribe(); // cleanup
-}, []);
 
   // MEMOIZED HANDLERS (prevents re-renders)
   const handleGameNameChange = useCallback((text: string) => {
@@ -105,80 +116,112 @@ useEffect(() => {
     setCurrentView(view);
   }, []);
 
-
-
   //Video URL Functions
   const onVideoStateChange = (state: "unstarted" | "ended" | "playing" | "paused" | "buffering" | "cued") => {
-  if (state === "playing") {
-    setIsVideoPlaying(true);
-  } else if (state === "paused" || state === "ended") {
-    setIsVideoPlaying(false);
-    if (state === "ended") {
-      setCurrentGameURL("");
+    if (state === "playing") {
+      setIsVideoPlaying(true);
+    } else if (state === "paused" || state === "ended") {
+      setIsVideoPlaying(false);
+      if (state === "ended") {
+        setCurrentGameURL("");
+      }
     }
-  }
-};
+  };
 
-/*
   const togglePlaying = useCallback(() => {
     setIsVideoPlaying((prev) => !prev);
   }, []);
 
   const getURLID = (url: string): string => {
-  try {
-    const parsed = new URL(url);
-    if (parsed.hostname === 'youtu.be') {
-      return parsed.pathname.slice(1);
+    try {
+      const parsed = new URL(url);
+      if (parsed.hostname === 'youtu.be') {
+        return parsed.pathname.slice(1);
+      }
+      return parsed.searchParams.get('v') || '';
+    } catch {
+      return '';
     }
-    return parsed.searchParams.get('v') || '';
-  } catch {
-    return '';
-  }
-};
-*/
+  };
 
   // USER MANAGEMENT FUNCTIONS
-  const initializeUser = useCallback(async () => {
+  const initializeUser = useCallback(async (user: any) => {
+    if (!user) return;
+    
     try {
-      const userRef = doc(db, "users", playerId);
+      console.log('Initializing user:', user.uid);
+      const userRef = doc(db, "users", user.uid);
       const userSnap = await getDoc(userRef);
       
       if (!userSnap.exists()) {
-        // Create new user
-        await setDoc(userRef, {
-          name: playerId,
+        console.log('Creating new user document');
+        // Create new user with email as name
+        const newUserData = {
+          uid: user.uid,
+          email: user.email,
+          name: user.email || `User_${user.uid.slice(0, 6)}`,
           totalPoints: 0,
           gamesPlayed: 0,
           correctPredictions: 0,
           totalPredictions: 0,
-          lastPlayed: new Date()
-        });
+          lastPlayed: new Date(),
+          createdAt: new Date(),
+          isAdmin: null
+        };
+        
+        await setDoc(userRef, newUserData);
+        console.log('User document created successfully:', newUserData);
+      } else {
+        console.log('User document already exists');
       }
     } catch (error) {
       console.error("Error initializing user:", error);
     }
-  }, [playerId]);
+  }, []);
 
   const updateUserStats = useCallback(async (userId: string, isCorrect: boolean, gameId: string) => {
     try {
+      console.log(`Updating stats for user ${userId}: correct=${isCorrect}`);
+      
       const userRef = doc(db, "users", userId);
-      const updates: any = {
-        totalPredictions: increment(1),
-        lastPlayed: new Date()
-      };
+      
+      // Check if user document exists first
+      const userSnap = await getDoc(userRef);
+      
+      if (!userSnap.exists()) {
+        // Create user document if it doesn't exist
+        await setDoc(userRef, {
+          uid: userId,
+          email: userId, // Will be updated with real email later
+          name: userId,
+          totalPoints: isCorrect ? 10 : 0,
+          gamesPlayed: 1,
+          correctPredictions: isCorrect ? 1 : 0,
+          totalPredictions: 1,
+          lastPlayed: new Date(),
+          createdAt: new Date(),
+          isAdmin: null
+        });
+        console.log(`Created new user document for ${userId}`);
+      } else {
+        // Update existing user document
+        const updates: any = {
+          totalPredictions: increment(1),
+          lastPlayed: new Date()
+        };
 
-      if (isCorrect) {
-        updates.correctPredictions = increment(1);
-        updates.totalPoints = increment(10); // 10 points per correct prediction
+        if (isCorrect) {
+          updates.correctPredictions = increment(1);
+          updates.totalPoints = increment(10); // 10 points per correct prediction
+        }
+
+        await updateDoc(userRef, updates);
+        console.log(`Updated existing user document for ${userId}`);
       }
-
-      await updateDoc(userRef, updates);
     } catch (error) {
       console.error("Error updating user stats:", error);
     }
   }, []);
-
-
 
   // ADMIN FUNCTIONS
   const adminCreateGame = useCallback(async () => {
@@ -188,27 +231,28 @@ useEffect(() => {
     }
 
     try {
-      const videoID = getURLID(gameURL)
+      const videoID = getURLID(gameURL);
       const docRef = await addDoc(collection(db, "games"), {
         name: gameName,
         status: "active",
         createdAt: new Date(),
         url: gameURL,
-        videoId: videoID
+        videoId: videoID,
+        createdBy: playerId // Track who created the game
       });
       
       setCurrentGameId(docRef.id);
       setCurrentGame(gameName);
       setCurrentGameURL(gameURL);
       setGameName('');
-      setGameURL('')
+      setGameURL('');
       Alert.alert('Success', `Game created: ${gameName}`);
       
     } catch (error) {
       console.error("Error creating game:", error);
       Alert.alert('Error', 'Failed to create game');
     }
-  }, [gameName, gameURL]);
+  }, [gameName, gameURL, playerId]);
 
   const adminCreateQuestion = useCallback(async (questionType: string) => {
     if (!currentGameId) {
@@ -240,7 +284,8 @@ useEffect(() => {
         options: questionData.options,
         status: "active",
         actual_result: null,
-        createdAt: new Date()
+        createdAt: new Date(),
+        createdBy: playerId // Track who created the question
       });
       
       setCurrentQuestionId(docRef.id);
@@ -248,6 +293,7 @@ useEffect(() => {
       setQuestionOptions(questionData.options);
       setPredictionStatus('Predictions OPEN');
       setUserPrediction('');
+      setCorrectAnswer('Not set');
       
       Alert.alert('Success', `Question created: ${questionData.text}`);
       
@@ -255,7 +301,7 @@ useEffect(() => {
       console.error("Error creating question:", error);
       Alert.alert('Error', 'Failed to create question');
     }
-  }, [currentGameId]);
+  }, [currentGameId, playerId]);
 
   const adminCloseQuestion = useCallback(async () => {
     if (!currentQuestionId) {
@@ -276,25 +322,68 @@ useEffect(() => {
       Alert.alert('Error', 'Failed to close question');
     }
   }, [currentQuestionId]);
+
   const adminEndedGame = useCallback(async () => {
+    console.log('=== END GAME CLICKED ===');
+    console.log('Current Game ID:', currentGameId);
+    
     if (!currentGameId) {
       Alert.alert('Error', 'No active game!');
       return;
     }
 
     try {
-      await updateDoc(doc(db, "games", currentGameId), {
-        status: "closed"
+      console.log('Attempting to close game:', currentGameId);
+      
+      const gameRef = doc(db, "games", currentGameId);
+      
+      // Check if game exists first
+      const gameSnap = await getDoc(gameRef);
+      if (!gameSnap.exists()) {
+        console.log('Game document does not exist');
+        Alert.alert('Error', 'Game not found in database');
+        return;
+      }
+      
+      console.log('Game exists, updating status...');
+      await updateDoc(gameRef, {
+        status: "closed",
+        endedAt: new Date(),
+        endedBy: playerId
       });
       
+
+      console.log('Game status updated successfully');
+
       setCurrentGameId(null);
+      setCurrentGameURL("");
+      setGameURL("");
+      setIsVideoPlaying(false);
       Alert.alert('Success', 'Game Ended!');
       
-    } catch (error) {
-      console.error("Error:", error);
-      Alert.alert('Error', 'Failed to close game');
+      
+      // COMPLETE RESET - Clear everything
+      setCurrentGameId(null);
+      setCurrentGame('No game active');
+      setCurrentGameURL('');
+      setIsVideoPlaying(false);
+      setCurrentQuestionId(null);
+      setCurrentQuestion('Waiting for question...');
+      setPredictionStatus('Waiting...');
+      setQuestionOptions([]);
+      setCorrectAnswer('Not set');
+      setUserPrediction('');
+      setAllGuesses([]); // Clear all predictions
+      setGameName('');
+      setGameURL('');
+      
+      Alert.alert('Success', 'Game Ended! Everything has been reset.');
+      
+    } catch (error: any) {
+      console.error("Error ending game:", error);
+      Alert.alert('Error', 'Failed to end game: ' + (error?.message || 'Unknown error'));
     }
-  }, [currentGameId]);
+  }, [currentGameId, playerId]);
 
   const adminSetAnswer = useCallback(async (answer: string) => {
     if (!currentQuestionId) {
@@ -333,14 +422,24 @@ useEffect(() => {
 
       let winners = 0;
       let total = 0;
+      const updatePromises: Promise<void>[] = [];
 
       snapshot.forEach((doc) => {
         const guess = doc.data();
         total++;
-        if (guess.prediction === correctAnswer) {
+        const isCorrect = guess.prediction === correctAnswer;
+        
+        if (isCorrect) {
           winners++;
         }
+        
+        // Update user stats for each player
+        const updatePromise = updateUserStats(guess.playerId, isCorrect, currentGameId || '');
+        updatePromises.push(updatePromise);
       });
+
+      // Wait for all user stat updates to complete
+      await Promise.all(updatePromises);
 
       Alert.alert(
         'Results', 
@@ -351,7 +450,7 @@ useEffect(() => {
       console.error("Error:", error);
       Alert.alert('Error', 'Failed to calculate winners');
     }
-  }, [currentQuestionId, correctAnswer]);
+  }, [currentQuestionId, correctAnswer, currentGameId, updateUserStats]);
 
   // PLAYER FUNCTIONS
   const playerMakePrediction = useCallback(async (choice: string) => {
@@ -365,11 +464,17 @@ useEffect(() => {
       return;
     }
 
+    if (!playerId) {
+      Alert.alert('Error', 'You must be logged in to make a prediction!');
+      return;
+    }
+
     try {
       await addDoc(collection(db, "guesses"), {
         prediction: choice,
         questionId: currentQuestionId,
-        playerId: playerId,
+        playerId: playerId, // Use actual user ID
+        playerEmail: currentUser?.email, // Store email for reference
         timestamp: new Date()
       });
 
@@ -380,7 +485,7 @@ useEffect(() => {
       console.error("Error:", error);
       Alert.alert('Error', 'Failed to submit prediction');
     }
-  }, [currentQuestionId, predictionStatus, playerId]);
+  }, [currentQuestionId, predictionStatus, playerId, currentUser]);
 
   // Real-time data loading
   const loadGuessesRealTime = useCallback(() => {
@@ -403,51 +508,42 @@ useEffect(() => {
     return unsubscribe;
   }, [currentQuestionId]);
 
-
-interface SharedVideoPlayerProps {
-  url: string;
-  isPlaying: boolean;
-  toggle: () => void;
-  onStateChange: (state: "unstarted" | "ended" | "playing" | "paused" | "buffering" | "cued") => void;
-}
-
-const SharedVideoPlayer: React.FC<SharedVideoPlayerProps> = ({ url, isPlaying, toggle, onStateChange }) => {
-  if (!url) return null;
-  return (
-    <View>
-      <YoutubePlayer
-        height={220}
-        play={isPlaying}
-        videoId={getURLID(url)}
-        onChangeState={onStateChange}
-      />
-    </View>
-  );
-};
+  // Show loading if not authenticated yet
+  if (!currentUser || !playerId) {
+    return (
+      <SafeAreaView style={styles.app}>
+        <View style={styles.container}>
+          <Text style={styles.title}>Loading...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.app}>
-      {/* View Toggle */}
-      <View style={styles.toggleContainer}>
-        {isAdminAccount !== null ? <TouchableOpacity 
-          style={[styles.toggleButton, currentView === 'admin' && styles.activeToggle]}
-          onPress={() => handleViewChange('admin')}
-        >
-          <Text style={[styles.toggleText, currentView === 'admin' && styles.activeToggleText]}>
-            👨‍💼 Admin
-          </Text>
-        </TouchableOpacity> : null}
-        <TouchableOpacity 
-          style={[styles.toggleButton, currentView === 'player' && styles.activeToggle]}
-          onPress={() => handleViewChange('player')}
-        >
-          <Text style={[styles.toggleText, currentView === 'player' && styles.activeToggleText]}>
-            🎯 Player
-          </Text>
-        </TouchableOpacity>
-      </View>
+      {/* View Toggle - only show if user is admin */}
+      {isAdminAccount && (
+        <View style={styles.toggleContainer}>
+          <TouchableOpacity 
+            style={[styles.toggleButton, currentView === 'admin' && styles.activeToggle]}
+            onPress={() => handleViewChange('admin')}
+          >
+            <Text style={[styles.toggleText, currentView === 'admin' && styles.activeToggleText]}>
+              👨‍💼 Admin
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={[styles.toggleButton, currentView === 'player' && styles.activeToggle]}
+            onPress={() => handleViewChange('player')}
+          >
+            <Text style={[styles.toggleText, currentView === 'player' && styles.activeToggleText]}>
+              🎯 Player
+            </Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
-      {isAdminAccount !== null ? (currentView === 'admin' ? (
+      {isAdminAccount && currentView === 'admin' ? (
         // ADMIN VIEW
         <ScrollView 
           style={styles.container}
@@ -455,6 +551,7 @@ const SharedVideoPlayer: React.FC<SharedVideoPlayerProps> = ({ url, isPlaying, t
           showsVerticalScrollIndicator={false}
         >
           <Text style={styles.title}>🔧 ADMIN PANEL</Text>
+          <Text style={styles.welcomeText}>Welcome, {currentUser?.email}!</Text>
           
           {!currentGameURL || getURLID(currentGameURL) === "" ? (
             <View style={styles.section}>
@@ -489,12 +586,13 @@ const SharedVideoPlayer: React.FC<SharedVideoPlayerProps> = ({ url, isPlaying, t
           {currentGameURL !== "" && (
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Game Play</Text>
-              <SharedVideoPlayer 
-                url={currentGameURL}
-                isPlaying={isVideoPlaying}
-                toggle={togglePlaying}
-                onStateChange={onVideoStateChange}
+              <YoutubePlayer
+                height={200}
+                play={isVideoPlaying}
+                videoId={getURLID(currentGameURL)}
+                onChangeState={onVideoStateChange}
               />
+            
               <TouchableOpacity style={styles.primaryButton} onPress={togglePlaying}>
                 <Text style={styles.buttonText}>▶️ {isVideoPlaying ? "Pause" : "Play"}</Text>
               </TouchableOpacity>
@@ -538,12 +636,16 @@ const SharedVideoPlayer: React.FC<SharedVideoPlayerProps> = ({ url, isPlaying, t
           {/* Control Game */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Step 3: Control Game</Text>
+            
             <TouchableOpacity style={styles.dangerButton} onPress={adminCloseQuestion}>
               <Text style={styles.buttonText}>🛑 Close Predictions</Text>
             </TouchableOpacity>
-              {currentGameId !== null ? <TouchableOpacity style={styles.dangerButton} onPress={adminEndedGame}>
-              <Text style={styles.buttonText}>🛑 End Game</Text>
-            </TouchableOpacity>: null}
+            
+            {currentGameId !== null ? (
+              <TouchableOpacity style={styles.dangerButton} onPress={adminEndedGame}>
+                <Text style={styles.buttonText}>🛑 End Game</Text>
+              </TouchableOpacity>
+            ) : null}
             
             <Text style={styles.subTitle}>Set Answer:</Text>
             {questionOptions.map((option, index) => (
@@ -571,99 +673,9 @@ const SharedVideoPlayer: React.FC<SharedVideoPlayerProps> = ({ url, isPlaying, t
             <Text style={styles.statusText}>👥 Total Predictions: {allGuesses.length}</Text>
           </View>
         </ScrollView>
-      ): <ScrollView 
-          style={styles.container}
-          keyboardShouldPersistTaps="always"
-          showsVerticalScrollIndicator={false}
-        >
-          <Text style={styles.title}>🎯 MAKE PREDICTION</Text>
-          {currentGameURL !== "" && (
-              <SharedVideoPlayer 
-              url={currentGameURL}
-              isPlaying={isVideoPlaying}
-              toggle={togglePlaying}
-              onStateChange={onVideoStateChange}
-            />
-            )}
-          
-          {/* Game Info */}
-          <View style={styles.gameInfo}>
-            <Text style={styles.gameText}>🏈 {currentGame}</Text>
-            <Text style={[styles.statusBadge, 
-              predictionStatus === 'Predictions OPEN' ? styles.openStatus : styles.closedStatus
-            ]}>
-              {predictionStatus}
-            </Text>
-          </View>
 
-          {/* Question */}
-          <View style={styles.questionSection}>
-            <Text style={styles.questionText}>{currentQuestion}</Text>
-            
-            {/* Prediction Buttons */}
-            {predictionStatus === 'Predictions OPEN' && questionOptions.map((option, index) => (
-              <TouchableOpacity 
-                key={`predict-${option}-${index}`}
-                style={[styles.predictButton, userPrediction === option && styles.selectedButton]} 
-                onPress={() => playerMakePrediction(option)}
-              >
-                <Text style={styles.buttonText}>
-                  {option} {userPrediction === option && '✓'}
-                </Text>
-              </TouchableOpacity>
-            ))}
-            
-            {predictionStatus === 'Predictions CLOSED' && (
-              <Text style={styles.closedText}>🛑 Predictions are closed. Waiting for results...</Text>
-            )}
-            
-            {userPrediction !== '' && (
-              <View style={styles.userChoiceContainer}>
-                <Text style={styles.userChoice}>Your prediction: {userPrediction}</Text>
-              </View>
-            )}
-          </View>
+      ) : (
 
-          {/* All Guesses */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>
-              👥 All Predictions ({allGuesses.length})
-            </Text>
-            {allGuesses.length === 0 ? (
-              <Text style={styles.noGuessesText}>No predictions yet. Be the first!</Text>
-            ) : (
-              allGuesses.map((guess, index) => {
-                const isCorrect = correctAnswer !== 'Not set' && guess.prediction === correctAnswer;
-                const isWrong = correctAnswer !== 'Not set' && guess.prediction !== correctAnswer;
-                const isCurrentUser = guess.playerId === playerId;
-                
-                return (
-                  <View key={`guess-${guess.id}-${index}`} style={[
-                    styles.guessItem,
-                    isCorrect && styles.correctGuess,
-                    isWrong && styles.wrongGuess,
-                    isCurrentUser && styles.currentUserGuess
-                  ]}>
-                    <Text style={styles.guessText}>
-                      {isCurrentUser ? '👤 You' : guess.playerId}: {guess.prediction}
-                      {isCorrect && ' ✅'}
-                      {isWrong && ' ❌'}
-                      {correctAnswer === 'Not set' && ' ⏳'}
-                    </Text>
-                  </View>
-                );
-              })
-            )}
-            
-            {correctAnswer !== 'Not set' && (
-              <View style={styles.correctAnswerBox}>
-                <Text style={styles.correctAnswerText}>
-                  🎯 Correct Answer: {correctAnswer}
-                </Text>
-              </View>
-            )}
-          </View>
-        </ScrollView>) : (
         // PLAYER VIEW
         <ScrollView 
           style={styles.container}
@@ -671,10 +683,20 @@ const SharedVideoPlayer: React.FC<SharedVideoPlayerProps> = ({ url, isPlaying, t
           showsVerticalScrollIndicator={false}
         >
           <Text style={styles.title}>🎯 MAKE PREDICTION</Text>
+          <Text style={styles.welcomeText}>Welcome, {currentUser?.email}!</Text>
           
           {/* Game Info */}
           <View style={styles.gameInfo}>
-            <Text style={styles.gameText}>🏈 {currentGameId !== null ? currentGame : null}</Text>
+            <Text style={styles.gameText}>🏈 {currentGame}</Text>
+            {currentGameURL !== "" && (
+              <YoutubePlayer
+                height={200}
+                play={isVideoPlaying}
+                videoId={getURLID(currentGameURL)}
+                onChangeState={onVideoStateChange}
+              />
+            )}
+
             <Text style={[styles.statusBadge, 
               predictionStatus === 'Predictions OPEN' ? styles.openStatus : styles.closedStatus
             ]}>
@@ -731,7 +753,7 @@ const SharedVideoPlayer: React.FC<SharedVideoPlayerProps> = ({ url, isPlaying, t
                     isCurrentUser && styles.currentUserGuess
                   ]}>
                     <Text style={styles.guessText}>
-                      {isCurrentUser ? '👤 You' : guess.playerId}: {guess.prediction}
+                      {isCurrentUser ? '👤 You' : (guess.playerEmail || guess.playerId)}: {guess.prediction}
                       {isCorrect && ' ✅'}
                       {isWrong && ' ❌'}
                       {correctAnswer === 'Not set' && ' ⏳'}
@@ -769,8 +791,15 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: 'bold',
     textAlign: 'center',
-    marginBottom: 25,
+    marginBottom: 10,
     color: '#2c3e50',
+  },
+  welcomeText: {
+    fontSize: 16,
+    textAlign: 'center',
+    marginBottom: 20,
+    color: '#7f8c8d',
+    fontStyle: 'italic',
   },
   section: {
     backgroundColor: 'white',
