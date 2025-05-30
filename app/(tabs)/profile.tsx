@@ -1,21 +1,25 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, View, Text, Image, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
-import { auth, db, storage} from '../../firebaseConfig'; // adjust path to your config
+import { StyleSheet, View, Text, Image, TouchableOpacity, ActivityIndicator, Alert, ScrollView } from 'react-native';
+import { auth, db, storage } from '../../firebaseConfig';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import * as ImagePicker from 'expo-image-picker';
-import SignOut from './signout'
-
+import SignOut from './signout';
+import { UserStats } from '../../components/userStats';
 
 export default function Profile() {
-  const [userData, setUserData] = useState({ id: '', name: '', profilePic: '' });
+  const [userData, setUserData] = useState({
+    name: '', firstName: '', lastName: '', userName: '', profilePic: '',
+    totalPoints: 0, correctPredictions: 0, totalPredictions: 0, gamesPlayed: 0, lastPlayed: null
+  });
   const [uploading, setUploading] = useState(false);
+  const [authUser, setAuthUser] = useState<any>(null);
 
-  // Load user info from Firestore
   useEffect(() => {
     const fetchUserData = async () => {
       const user = auth.currentUser;
       if (!user) return;
+      setAuthUser(user);
 
       const docRef = doc(db, 'users', user.uid);
       const docSnap = await getDoc(docRef);
@@ -23,15 +27,40 @@ export default function Profile() {
       if (docSnap.exists()) {
         const data = docSnap.data();
         setUserData({
-          id: user.uid,
-          name: data.name || data.email || `User_${user.uid.slice(0, 6)}`,
+          name: data.name || `${data.firstName || ''} ${data.lastName || ''}`.trim() || `User_${user.uid.slice(0, 6)}`,
+          firstName: data.firstName || '',
+          lastName: data.lastName || '',
+          userName: data.userName || '',
           profilePic: data.profilePic || '',
+          totalPoints: data.totalPoints || 0,
+          correctPredictions: data.correctPredictions || 0,
+          totalPredictions: data.totalPredictions || 0,
+          gamesPlayed: data.gamesPlayed || 0,
+          lastPlayed: data.lastPlayed || null,
         });
       }
     };
-
     fetchUserData();
   }, []);
+
+  // Example helper functions (replace with your actual logic if needed)
+  const getCurrentUserRank = () => 1; // Replace with real rank logic
+  const getRankSuffix = (rank: number) => {
+    if (rank % 100 >= 11 && rank % 100 <= 13) return 'th';
+    switch (rank % 10) {
+      case 1: return 'st';
+      case 2: return 'nd';
+      case 3: return 'rd';
+      default: return 'th';
+    }
+  };
+  const getAccuracy = (correct: number, total: number) =>
+    total > 0 ? Math.round((correct / total) * 100) : 0;
+  const formatLastPlayed = (timestamp: any) => {
+    if (!timestamp) return 'Never';
+    const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+    return date.toLocaleDateString();
+  };
 
   const pickImageAndUpload = async () => {
     // Ask for permission
@@ -82,30 +111,40 @@ export default function Profile() {
   };
 
   return (
-    <View style={styles.container}>
+    <ScrollView 
+      style={styles.container}
+      contentContainerStyle={{ alignItems: 'center', justifyContent: 'flex-start' }}
+    >
       {uploading ? (
         <ActivityIndicator size="large" color="#3498db" />
       ) : (
         <>
-          <Image
-            source={
-              userData.profilePic
-                ? { uri: userData.profilePic }
-                : require('../../assets/images/head_alizarin.png') // fallback image
-            }
-            style={styles.profileImage}
-          />
-          <TouchableOpacity style={styles.button} onPress={pickImageAndUpload}>
-            <Text style={styles.buttonText}>Change Profile Picture</Text>
+          <TouchableOpacity onPress={pickImageAndUpload}>
+            <Image
+              source={
+                userData.profilePic
+                  ? { uri: userData.profilePic }
+                  : require('../../assets/images/head_alizarin.png')
+              }
+              style={styles.profileImage}
+            />
           </TouchableOpacity>
+          <Text style={styles.name}>{userData.firstName} {userData.lastName}</Text>
+          <Text style={styles.id}>{userData.userName}</Text>
 
-          <Text style={styles.name}>{userData.name}</Text>
-          <Text style={styles.id}>ID: {userData.id}</Text>
+          <UserStats
+            currentUser={userData}
+            authUser={authUser}
+            getCurrentUserRank={getCurrentUserRank}
+            getRankSuffix={getRankSuffix}
+            getAccuracy={getAccuracy}
+            formatLastPlayed={formatLastPlayed}
+          />
 
           <SignOut />
         </>
       )}
-    </View>
+    </ScrollView>
   );
 }
 
@@ -114,9 +153,8 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f5f7fa',
-    alignItems: 'center',
-    justifyContent: 'center',
     padding: 20,
+    paddingTop: 60,
   },
   profileImage: {
     width: 120,
