@@ -7,13 +7,15 @@ import { router } from "expo-router";
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 
 const index = () => {
-  const [email, setEmail] = useState(""); // set up states for the email and password originally just empty strings
-  const [password, setPassword] = useState("");
+    const [email, setEmail] = useState(""); // set up states for the email and password originally just empty strings
+    const [password, setPassword] = useState("");
+    const [firstName, setFirstName] = useState("");
+    const [lastName, setLastName] = useState("");
+    const [userName, setUserName] = useState("");
 
-  const emailSignIn = async () => {
+  const emailSignUp = async () => {
     try {
-      const user = await signInWithEmailAndPassword(auth, email, password); // take email and password and push to firebase
-      if (user) router.replace("/(tabs)/home"); // if user exists send them to the next page
+      const user = await createUserWithEmailAndPassword(auth, email, password); // take email and password and push to firebase
       const userCredential = user.user
       const userRef = doc(db, 'users', userCredential.uid)
       const userSnap = await getDoc(userRef)
@@ -21,6 +23,9 @@ const index = () => {
       if (!userSnap.exists()) {
         await setDoc(userRef, {
           uid: userCredential.uid,
+          firstName,
+          lastName,
+          userName,
           email: userCredential.email,
           createdAt: new Date().toISOString(),
           isAdmin: null,
@@ -28,35 +33,54 @@ const index = () => {
           gamesPlayed: 0,
           totalPoints: 0,
           totalPredictions: 0
-        })
+        });
       }
+
+      router.replace("/(tabs)/home")
+
     } catch (error: any) {
       console.log(error);
-      alert("Sign in failed: " + error.message);
+      alert("Sign up failed: " + error.message);
     }
   };
+  
 
   // Sign in with google import did not work on expo go, needs to be within use of expo dev client
   return (
     <SafeAreaView style={styles.container}>
-      <Text style={styles.title}>Login</Text>
-      <TextInput
-        style={styles.textInput}
-        placeholder="email"
-        value={email}
-        onChangeText={setEmail}
-      />
-      <TextInput
-        style={styles.textInput}
-        placeholder="password"
-        value={password}
-        onChangeText={setPassword}
-        secureTextEntry
-      />
-      <TouchableOpacity style={styles.button} onPress={emailSignIn}>
-        <Text style={styles.text}>Login</Text>
-      </TouchableOpacity>
-      <TouchableOpacity style={styles.button} onPress={() => router.push("/createAccount")}>
+      <Text style={styles.title}>Create Account</Text>
+        <TextInput
+            style={styles.textInput}
+            placeholder="First Name"
+            value={firstName}
+            onChangeText={setFirstName}
+        />
+        <TextInput
+            style={styles.textInput}
+            placeholder="Last Name"
+            value={lastName}
+            onChangeText={setLastName}
+        />
+        <TextInput
+            style={styles.textInput}
+            placeholder="User Name"
+            value={userName}
+            onChangeText={setUserName}
+        />
+        <TextInput
+            style={styles.textInput}
+            placeholder="email"
+            value={email}
+            onChangeText={setEmail}
+        />
+        <TextInput
+            style={styles.textInput}
+            placeholder="password"
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry
+        />
+      <TouchableOpacity style={styles.button} onPress={(emailSignUp)}>
         <Text style={styles.text}>Make Account</Text>
       </TouchableOpacity>
     </SafeAreaView>
