@@ -23,7 +23,7 @@ const index = () => {
           uid: userCredential.uid,
           email: userCredential.email,
           createdAt: new Date().toISOString(),
-          isAdmin: null,
+          isGamemaster: null,
           correctPredictions: 0,
           gamesPlayed: 0,
           totalPoints: 0,
