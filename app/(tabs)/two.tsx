@@ -134,7 +134,7 @@ export default function LeaderboardScreen() {
         totalPredictions: 0,
         lastPlayed: Timestamp.fromDate(new Date()), 
         createdAt: Timestamp.fromDate(new Date()),   
-        isAdmin: null
+        isGamemaster: null
       };
 
       await setDoc(userRef, newUserData);

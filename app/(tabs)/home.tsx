@@ -67,7 +67,7 @@ interface Game {
 
 export default function Home() {
   // State variables
-  const [currentView, setCurrentView] = useState<'player' | 'admin' | 'games'>('player');
+  const [currentView, setCurrentView] = useState<'player' | 'gamemaster' | 'games'>('player');
   const [gameNames, setGameNames] = useState<string[]>([]);
   const [currentGameId, setCurrentGameId] = useState<string | null>(null);
   const [currentQuestionId, setCurrentQuestionId] = useState<string | null>(null);
@@ -80,7 +80,7 @@ export default function Home() {
   const [questionOptions, setQuestionOptions] = useState<string[]>([]);
   const [correctAnswer, setCorrectAnswer] = useState('Not set');
   const [liveGames, setLiveGames] = useState<string[]>([]);
-  const [isAdminAccount, setIsAdminAccount] = useState<boolean | null>(null);
+  const [isGameMasterAccount, setIsGameMasterAccount] = useState<boolean | null>(null);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [playerId, setPlayerId] = useState<string>('');
   const [refreshing, setRefreshing] = useState(false);
@@ -188,8 +188,8 @@ export default function Home() {
 
         if (userSnap.exists()) {
           const data = userSnap.data();
-          setIsAdminAccount(data.isAdmin === true); // Check if user is admin
-          console.log('User isAdmin:', data.isAdmin);
+          setIsGameMasterAccount(data.isGamemaster === true); // Check if user is admin
+          console.log('User is gamemaster:', data.isGamemaster);
           console.log('User data:', data);
           
           // ===== NEW: Initialize and Load Templates After User Authentication =====
@@ -197,7 +197,7 @@ export default function Home() {
           await loadQuestionTemplates();
         } else {
           console.log('User document does not exist');
-          setIsAdminAccount(false);
+          setIsGameMasterAccount(false);
         }
       } else {
         // User not logged in, redirect to login
@@ -353,7 +353,7 @@ export default function Home() {
     setGameName(text);
   }, []);
 
-  const handleViewChange = useCallback((view: 'player' | 'admin' | 'games') => {
+  const handleViewChange = useCallback((view: 'player' | 'gamemaster' | 'games') => {
     setCurrentView(view);
   }, []);
 
@@ -407,7 +407,7 @@ export default function Home() {
           totalPredictions: 0,
           lastPlayed: new Date(),
           createdAt: new Date(),
-          isAdmin: null
+          isGamemaster: null
         };
         
         await setDoc(userRef, newUserData);
@@ -441,7 +441,7 @@ export default function Home() {
           totalPredictions: 1,
           lastPlayed: new Date(),
           createdAt: new Date(),
-          isAdmin: null
+          isGamemaster: null
         });
         console.log(`Created new user document for ${userId}`);
       } else {
@@ -850,14 +850,14 @@ export default function Home() {
     <SafeAreaView style={styles.app}>
       
       {/* View Toggle - only show if user is admin */}
-      {isAdminAccount === true ? (
+      {isGameMasterAccount === true ? (
         <View style={styles.toggleContainer}>
           <TouchableOpacity 
-            style={[styles.toggleButton, currentView === 'admin' && styles.activeToggle]}
-            onPress={() => handleViewChange('admin')}
+            style={[styles.toggleButton, currentView === 'gamemaster' && styles.activeToggle]}
+            onPress={() => handleViewChange('gamemaster')}
           >
-            <Text style={[styles.toggleText, currentView === 'admin' && styles.activeToggleText]}>
-              👨‍💼 Admin
+            <Text style={[styles.toggleText, currentView === 'gamemaster' && styles.activeToggleText]}>
+              👨‍💼 GM
             </Text>
           </TouchableOpacity>
           <TouchableOpacity 
@@ -897,7 +897,7 @@ export default function Home() {
         
         </View>}
 
-      {isAdminAccount && currentView === 'admin' ? (
+      {isGameMasterAccount && currentView === 'gamemaster' ? (
         // ADMIN VIEW
         <ScrollView 
           style={styles.container}
@@ -908,7 +908,7 @@ export default function Home() {
           showsVerticalScrollIndicator={false}
         >
           
-          <Text style={styles.title}>🔧 ADMIN PANEL</Text>
+          <Text style={styles.title}>🔧 GAMEMASTER PANEL</Text>
           <Text style={styles.welcomeText}>Welcome, {currentUser?.email}!</Text>
           
           {!currentGameURL || getURLID(currentGameURL) === "" ? (
