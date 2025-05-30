@@ -4,7 +4,7 @@ import { auth, db } from "../firebaseConfig";
 import {createUserWithEmailAndPassword,signInWithEmailAndPassword} from "firebase/auth";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router } from "expo-router";
-import { doc, setDoc, getDoc } from 'firebase/firestore';
+import { doc, setDoc, getDoc, query, collection, where, getDocs } from 'firebase/firestore';
 
 const index = () => {
     const [email, setEmail] = useState(""); // set up states for the email and password originally just empty strings
@@ -15,6 +15,40 @@ const index = () => {
 
   const emailSignUp = async () => {
     try {
+    //Check if username exists
+    const usernameQuery = query(
+      collection(db, 'users'),
+      where('userName', '==', userName)
+    );
+    const usernameSnapshot = await getDocs(usernameQuery);
+    console.log(usernameSnapshot.docs.length)
+
+    if (!userName.trim()) {
+      alert("Username cannot be empty.");
+      return;
+    }
+
+    if (userName.trim().length < 6) {
+        alert("Username must be at least 6 characters long.");
+        return;
+    }
+
+    if (!firstName.trim() || !lastName.trim()) {
+      alert("First and last name cannot be empty.");
+      return;
+    }
+
+    if (!email.trim() || !password.trim()) {
+      alert("Email and password cannot be empty.");
+      return;
+    }
+
+    if (!usernameSnapshot.empty) {
+      alert("That username is already taken. Please choose another.");
+      return;
+    }
+
+    //Account Creation
       const user = await createUserWithEmailAndPassword(auth, email, password); // take email and password and push to firebase
       const userCredential = user.user
       const userRef = doc(db, 'users', userCredential.uid)

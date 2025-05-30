@@ -26,6 +26,7 @@ import {
 } from 'firebase/firestore';
 import { router } from 'expo-router';
 
+import { UserStats } from '../../components/userStats';
 // Types
 interface User {
   id: string;
@@ -254,39 +255,14 @@ export default function LeaderboardScreen() {
 
         {/* Your Stats Section */}
         {currentUser && (
-          <View style={styles.currentUserSection}>
-            <Text style={styles.sectionTitle}>📊 Your Stats</Text>
-            <Text style={styles.userEmail}>{authUser?.email}</Text>
-            <View style={styles.statsGrid}>
-              <View style={styles.statCard}>
-                <Text style={styles.statValue}>{getCurrentUserRank() || '--'}</Text>
-                <Text style={styles.statLabel}>
-                  {getCurrentUserRank() ? `${getCurrentUserRank()}${getRankSuffix(getCurrentUserRank())} Place` : 'Unranked'}
-                </Text>
-              </View>
-              <View style={styles.statCard}>
-                <Text style={styles.statValue}>{currentUser.totalPoints}</Text>
-                <Text style={styles.statLabel}>Total Points</Text>
-              </View>
-              <View style={styles.statCard}>
-                <Text style={styles.statValue}>{getAccuracy(currentUser.correctPredictions, currentUser.totalPredictions)}%</Text>
-                <Text style={styles.statLabel}>Accuracy</Text>
-              </View>
-              <View style={styles.statCard}>
-                <Text style={styles.statValue}>{currentUser.gamesPlayed}</Text>
-                <Text style={styles.statLabel}>Games Played</Text>
-              </View>
-            </View>
-            
-            <View style={styles.detailedStats}>
-              <Text style={styles.detailText}>
-                ✅ Correct Predictions: {currentUser.correctPredictions} / {currentUser.totalPredictions}
-              </Text>
-              <Text style={styles.detailText}>
-                🕐 Last Played: {formatLastPlayed(currentUser.lastPlayed)}
-              </Text>
-            </View>
-          </View>
+          <UserStats
+            currentUser={currentUser}
+            authUser={authUser}
+            getCurrentUserRank={getCurrentUserRank}
+            getRankSuffix={getRankSuffix}
+            getAccuracy={getAccuracy}
+            formatLastPlayed={formatLastPlayed}
+          />
         )}
 
         {/* Top Players Section */}
