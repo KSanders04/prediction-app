@@ -52,7 +52,8 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.4,
     shadowRadius: 5,
     elevation: 5, 
-    marginTop: 15, 
+    marginTop: 10, 
+    marginBottom: 20,
   },
   text: {
     color: '#FFFFFF', 
