@@ -179,7 +179,7 @@ export default function Home() {
 
         if (userSnap.exists()) {
           const data = userSnap.data();
-          setIsGameMasterAccount(data.isGamemaster === true); // Check if user is admin
+          setIsGameMasterAccount(data.isAdmin === true); // Check if user is admin
           console.log('User is gamemaster:', data.isGamemaster);
           console.log('User data:', data);
           
