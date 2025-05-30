@@ -35,7 +35,6 @@ import {
 import { router } from 'expo-router';
 import YoutubePlayer from 'react-native-youtube-iframe'
 
-// Types
 interface Guess {
   id: string;
   prediction: string;
@@ -44,9 +43,6 @@ interface Guess {
   playerEmail?: string; // Optional field for user email
   timestamp: Timestamp;
 }
-
-// ===== NEW: Question Template Interface =====
-// This matches the professor's diagram structure
 interface QuestionTemplate {
   id: string;
   text: string; // Question text template
@@ -88,11 +84,8 @@ export default function Home() {
   const [gameURL, setGameURL] = useState('');
   const [currentGameURL, setCurrentGameURL] = useState('');
   const [isVideoPlaying, setIsVideoPlaying] = useState(true);
-
-  // ===== NEW: Question Template State =====
   const [questionTemplates, setQuestionTemplates] = useState<QuestionTemplate[]>([]);
 
-  // ===== NEW: Initialize Question Templates Function =====
   // This creates the questionTemplates collection in Firebase if it doesn't exist
   const initializeQuestionTemplates = useCallback(async () => {
     try {
@@ -100,15 +93,13 @@ export default function Home() {
       
       // Check if questionTemplates collection exists and has data
       const templatesSnapshot = await getDocs(collection(db, "questionTemplates"));
-      
       if (templatesSnapshot.empty) {
         console.log('📝 No templates found, creating default templates...');
         
-        // ===== CREATE DEFAULT TEMPLATES =====
-        // These match your current hardcoded questions but stored in Firebase
+        //create default template : These match our current hardcoded questions but stored in Firebase
         const defaultTemplates = [
           {
-            text: "Will the field goal be MADE or MISSED?",
+            text: "Will the field goal be :MADE or MISSED?",
             options: [
               { optionText: "MADE" },
               { optionText: "MISSED" }
@@ -154,7 +145,7 @@ export default function Home() {
     }
   }, []);
 
-  // ===== NEW: Load Templates from Firebase =====
+  // Load Templates from Firebase 
   const loadQuestionTemplates = useCallback(async () => {
     try {
       console.log('📥 Loading question templates from Firebase...');
@@ -192,7 +183,7 @@ export default function Home() {
           console.log('User is gamemaster:', data.isGamemaster);
           console.log('User data:', data);
           
-          // ===== NEW: Initialize and Load Templates After User Authentication =====
+          // NEW: Initialize and Load Templates After User Authentication 
           await initializeQuestionTemplates();
           await loadQuestionTemplates();
         } else {
@@ -209,7 +200,7 @@ export default function Home() {
     return () => unsubscribe();
   }, [initializeQuestionTemplates, loadQuestionTemplates]); // Add dependencies
 
-  // ===== EXISTING: REAL-TIME GAME AND QUESTION LISTENER =====
+  //  REAL-TIME GAME AND QUESTION LISTENER 
   // This makes ALL players see the same game/question across devices
   useEffect(() => {
     if (!playerId) return; // Wait for user to be authenticated
@@ -312,7 +303,7 @@ export default function Home() {
     return unsubscribeQuestions;
   }, [playerId]);
 
-  // ===== EXISTING: Check if user already made a prediction =====
+  // Check if user already made a prediction
   const checkUserPrediction = useCallback(async (questionId: string) => {
     if (!playerId) return;
     
@@ -464,9 +455,8 @@ export default function Home() {
     }
   }, []);
 
-  // ===== EXISTING: ADMIN FUNCTIONS FOR MULTI-DEVICE SUPPORT =====
-  
-  // EXISTING: Ensure only one active game at a time
+  // ADMIN FUNCTIONS FOR MULTI-DEVICE SUPPORT =====
+  // Ensure only one active game at a time
   const adminCreateGame = useCallback(async () => {
     if (!gameName.trim()) {
       Alert.alert('Error', 'Please enter a game name!');
@@ -505,11 +495,6 @@ export default function Home() {
         createdBy: playerId // Track who created the game
       });
       
-      // REMOVED: Manual state setting since real-time listener will handle this
-      // setCurrentGameId(docRef.id);
-      // setCurrentGame(gameName);
-      // setCurrentGameURL(gameURL);
-      
       setGameName('');
       setGameURL('');
       Alert.alert('Success', `Game created: ${gameName}. All players can now see this game!`);
@@ -520,7 +505,7 @@ export default function Home() {
     }
   }, [gameName, gameURL, playerId]);
 
-  // ===== NEW: Create Question from Template Function =====
+  // Create Question from Template Function =====
   // This replaces the hardcoded question creation with template-based creation
   const adminCreateQuestionFromTemplate = useCallback(async (templateType: string) => {
     if (!currentGameId) {
@@ -575,9 +560,6 @@ export default function Home() {
     }
   }, [currentGameId, playerId, questionTemplates]);
 
-  // ===== REMOVED: Old hardcoded question creation - not needed anymore =====
-  // The adminCreateQuestion function has been completely removed since templates handle this better
-
   const adminCloseQuestion = useCallback(async () => {
     if (!currentQuestionId) {
       Alert.alert('Error', 'No active question!');
@@ -597,7 +579,7 @@ export default function Home() {
     }
   }, [currentQuestionId]);
 
-  // ===== EXISTING: Games functionality =====
+  // Games functionality 
   const fetchActiveGames = useCallback(async () => {
     try {
       const gamesRef = collection(db, 'games');
@@ -1163,7 +1145,6 @@ export default function Home() {
   );
 }
 
-// ===== COMPLETE STYLES WITH NEW TEMPLATE STYLES =====
 const styles = StyleSheet.create({
   app: {
     flex: 1,
