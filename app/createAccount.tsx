@@ -120,13 +120,13 @@ const index = () => {
         />
         <TextInput
             style={styles.textInput}
-            placeholder="email"
+            placeholder="Email"
             value={email}
             onChangeText={setEmail}
         />
         <TextInput
             style={styles.textInput}
-            placeholder="password"
+            placeholder="Password"
             value={password}
             onChangeText={setPassword}
             secureTextEntry
