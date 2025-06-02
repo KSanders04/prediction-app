@@ -40,31 +40,38 @@ interface Guess {
   prediction: string;
   questionId: string;
   playerId: string;
-  playerEmail?: string; // Optional field for user email
+  playerEmail?: string;
   timestamp: Timestamp;
 }
+
 interface QuestionTemplate {
   id: string;
-  text: string; // Question text template
+  text: string;
   options: Array<{
     optionText: string;
-    optionPicture?: string; // Optional image for option
-    optionVideo?: string;   // Optional video for option
+    optionPicture?: string;
+    optionVideo?: string;
   }>;
-  type: string; // "field_goal", "coin_flip", "next_play"
+  type: string;
   createdAt?: Date;
   updatedAt?: Date;
 }
 
 interface Game {
+  id: string;
   name: string;
   status: string;
+  createdBy: string;
+  url?: string;
+  videoId?: string;
+  createdAt: Date;
 }
 
 export default function Home() {
   // State variables
   const [currentView, setCurrentView] = useState<'player' | 'gamemaster' | 'games'>('player');
   const [gameNames, setGameNames] = useState<string[]>([]);
+  const [allGames, setAllGames] = useState<Game[]>([]); // NEW: Store all game objects
   const [currentGameId, setCurrentGameId] = useState<string | null>(null);
   const [currentQuestionId, setCurrentQuestionId] = useState<string | null>(null);
   const [gameName, setGameName] = useState('');
@@ -89,18 +96,38 @@ export default function Home() {
   const [playerSelectedGameURL, setPlayerSelectedGameURL] = useState<string | null>(null);
   const [adminGameOpen, setAdminGameOpen] = useState<boolean>(false);
 
+  // FIXED: Load user data from Firestore to get userName
+  const [currentUserData, setCurrentUserData] = useState<any>(null);
+  // NEW: Track which game the admin is currently managing
+  const [adminCurrentGameId, setAdminCurrentGameId] = useState<string | null>(null);
+
+  // Load current user data from Firestore
+  const loadCurrentUserData = useCallback(async () => {
+    if (!playerId) return;
+    
+    try {
+      const userRef = doc(db, 'users', playerId);
+      const userSnap = await getDoc(userRef);
+      
+      if (userSnap.exists()) {
+        const userData = userSnap.data();
+        setCurrentUserData(userData);
+        console.log('Loaded user data:', userData);
+      }
+    } catch (error) {
+      console.error('Error loading user data:', error);
+    }
+  }, [playerId]);
 
   // This creates the questionTemplates collection in Firebase if it doesn't exist
   const initializeQuestionTemplates = useCallback(async () => {
     try {
       console.log('🔧 Checking for existing question templates...');
       
-      // Check if questionTemplates collection exists and has data
       const templatesSnapshot = await getDocs(collection(db, "questionTemplates"));
       if (templatesSnapshot.empty) {
         console.log('📝 No templates found, creating default templates...');
         
-        //create default template : These match our current hardcoded questions but stored in Firebase
         const defaultTemplates = [
           {
             text: "Will the field goal be :MADE or MISSED?",
@@ -131,10 +158,31 @@ export default function Home() {
             type: "next_play",
             createdAt: new Date(),
             updatedAt: new Date()
+          },
+          {
+            text: "Will this drive result in: TOUCHDOWN, FIELD GOAL, or TURNOVER?",
+            options: [
+              { optionText: "TOUCHDOWN" },
+              { optionText: "FIELD GOAL" },
+              { optionText: "TURNOVER" }
+            ],
+            type: "drive_result",
+            createdAt: new Date(),
+            updatedAt: new Date()
+          },
+          {
+            text: "Will the quarterback: THROW, RUN, or HAND OFF?",
+            options: [
+              { optionText: "THROW" },
+              { optionText: "RUN" },
+              { optionText: "HAND OFF" }
+            ],
+            type: "qb_action",
+            createdAt: new Date(),
+            updatedAt: new Date()
           }
         ];
 
-        // Add each template to Firebase questionTemplates collection
         for (const template of defaultTemplates) {
           await addDoc(collection(db, "questionTemplates"), template);
           console.log(`✅ Created template: ${template.type}`);
@@ -173,98 +221,147 @@ export default function Home() {
       if (user) {
         console.log('User authenticated:', user.uid, user.email);
         setCurrentUser(user);
-        setPlayerId(user.uid); // Use actual user ID instead of random
+        setPlayerId(user.uid);
         
-        // Initialize user document
         await initializeUser(user);
+        await loadCurrentUserData(); // Load user data after authentication
         
         const userRef = doc(db, 'users', user.uid);
         const userSnap = await getDoc(userRef);
 
         if (userSnap.exists()) {
           const data = userSnap.data();
-          setIsGameMasterAccount(data.isAdmin === true); // Check if user is admin
+          setIsGameMasterAccount(data.isGamemaster === true);
           console.log('User is gamemaster:', data.isGamemaster);
-          console.log('User data:', data);
           
-          // NEW: Initialize and Load Templates After User Authentication 
           await initializeQuestionTemplates();
           await loadQuestionTemplates();
+          await loadCurrentUserData(); // Load user data after setting gamemaster status
         } else {
           console.log('User document does not exist');
           setIsGameMasterAccount(false);
         }
       } else {
-        // User not logged in, redirect to login
         console.log('User not authenticated, redirecting to login');
         router.replace('/login');
       }
     });
 
     return () => unsubscribe();
-  }, [initializeQuestionTemplates, loadQuestionTemplates]); // Add dependencies
+  }, [initializeQuestionTemplates, loadQuestionTemplates, loadCurrentUserData]);
 
-  //  REAL-TIME GAME AND QUESTION LISTENER 
-  // This makes ALL players see the same game/question across devices
+  // NEW: Enhanced real-time listener for ALL games (for players) and admin's games
   useEffect(() => {
-    if (!playerId) return; // Wait for user to be authenticated
+    if (!playerId) return;
     
-    console.log('Setting up real-time listeners for all games and questions');
+    console.log('Setting up real-time listeners for games and questions');
     
-    if (isGameMasterAccount) {
-      const gamesQuery = query(
+    // Listen for ALL active games (for players to see in Games tab)
+    const allGamesQuery = query(
       collection(db, "games"),
       where("status", "==", "active"),
-      where("createdBy", "==", playerId)
+      orderBy("createdAt", "desc")
     );
 
-    const unsubscribeGames = onSnapshot(gamesQuery, (snapshot) => {
-      if (!snapshot.empty) {
-        // Get the first (and should be only) active game
-        const gameDoc = snapshot.docs[0];
-        const gameData = gameDoc.data();
-        
-        console.log('Found active game:', gameData.name);
-        
-        // Set the current game info for ALL players (admin and regular players)
-        setCurrentGameId(gameDoc.id);
-        setCurrentGame(gameData.name);
-        setCurrentGameURL(gameData.url || '');
-        
-        // Now listen for active questions in this game
-        listenForActiveQuestions(gameDoc.id);
-      } else {
-        console.log('No active games found - resetting everything');
-        setCurrentGameId(null);
-        setCurrentGame('No game active');
-        setCurrentGameURL('');
-        setCurrentQuestionId(null);
-        setCurrentQuestion('Waiting for question...');
-        setPredictionStatus('Waiting...');
-        setQuestionOptions([]);
-        setCorrectAnswer('Not set');
-        setUserPrediction('');
-        setAllGuesses([]);
-      }
+    const unsubscribeAllGames = onSnapshot(allGamesQuery, (snapshot) => {
+      const games: Game[] = [];
+      const gameNames: string[] = [];
+      
+      snapshot.forEach((doc) => {
+        const gameData = doc.data();
+        const game: Game = {
+          id: doc.id,
+          name: gameData.name,
+          status: gameData.status,
+          createdBy: gameData.createdBy,
+          url: gameData.url,
+          videoId: gameData.videoId,
+          createdAt: gameData.createdAt?.toDate() || new Date()
+        };
+        games.push(game);
+        gameNames.push(gameData.name);
+      });
+      
+      setAllGames(games);
+      setGameNames(gameNames);
+      console.log(`Found ${games.length} active games from all admins`);
     });
 
-    return () => {
-      console.log('Cleaning up real-time game listeners');
-      unsubscribeGames();
-    };
-  }
-  }, [playerId, isGameMasterAccount]); // Run when playerId changes (user logs in)
+    // If user is admin, listen for THEIR active games specifically
+    if (isGameMasterAccount) {
+      const adminGamesQuery = query(
+        collection(db, "games"),
+        where("status", "==", "active"),
+        where("createdBy", "==", playerId)
+      );
 
-  // ===== EXISTING: Listen for active questions in real-time =====
+      const unsubscribeAdminGames = onSnapshot(adminGamesQuery, (snapshot) => {
+        if (!snapshot.empty) {
+          const gameDoc = snapshot.docs[0]; // Admin should only have one active game
+          const gameData = gameDoc.data();
+          
+          console.log('Admin found their active game:', gameData.name);
+          
+          setAdminCurrentGameId(gameDoc.id);
+          setCurrentGameId(gameDoc.id);
+          setCurrentGame(gameData.name);
+          setCurrentGameURL(gameData.url || '');
+          setAdminGameOpen(true);
+          
+          // Listen for questions in admin's game
+          listenForActiveQuestions(gameDoc.id);
+        } else {
+          console.log('No active games found for this admin');
+          setAdminCurrentGameId(null);
+          setAdminGameOpen(false);
+          // Don't reset currentGameId here if player selected a game
+          if (!playerSelectedGame) {
+            setCurrentGameId(null);
+            setCurrentGame('No game active');
+            setCurrentGameURL('');
+            setCurrentQuestionId(null);
+            setCurrentQuestion('Waiting for question...');
+            setPredictionStatus('Waiting...');
+            setQuestionOptions([]);
+            setCorrectAnswer('Not set');
+            setUserPrediction('');
+            setAllGuesses([]);
+          }
+        }
+      });
+
+      return () => {
+        console.log('Cleaning up admin game listeners');
+        unsubscribeAllGames();
+        unsubscribeAdminGames();
+      };
+    }
+
+    return () => {
+      console.log('Cleaning up all games listener');
+      unsubscribeAllGames();
+    };
+  }, [playerId, isGameMasterAccount]);
+
+  // NEW: Listen for questions in the selected game (for players)
+  useEffect(() => {
+    if (currentGameId && !isGameMasterAccount) {
+      console.log('Player listening for questions in game:', currentGameId);
+      const unsubscribe = listenForActiveQuestions(currentGameId);
+      return () => unsubscribe && unsubscribe();
+    }
+  }, [currentGameId, isGameMasterAccount]);
+
+  // Listen for active questions in real-time
   const listenForActiveQuestions = useCallback((gameId: string) => {
     console.log('Setting up real-time question listener for game:', gameId);
     
     const questionsQuery = query(
-      collection(db, "questions"), // CHANGED: using "questions" instead of "predictions"
+      collection(db, "questions"),
       where("gameId", "==", gameId),
       where("status", "in", ["active", "closed", "finished"]),
       orderBy("createdAt", "desc"),
-      limit(1) // Get only the most recent question
+      limit(1)
     );
 
     const unsubscribeQuestions = onSnapshot(questionsQuery, (snapshot) => {
@@ -275,13 +372,11 @@ export default function Home() {
         console.log('Found question:', questionData.question);
         console.log('Question status:', questionData.status);
         
-        // Update question info for ALL players
         setCurrentQuestionId(questionDoc.id);
         setCurrentQuestion(questionData.question);
         setQuestionOptions(questionData.options || []);
         setCorrectAnswer(questionData.actual_result || 'Not set');
         
-        // Set prediction status based on question status
         if (questionData.status === "active") {
           setPredictionStatus('Predictions OPEN');
         } else if (questionData.status === "closed") {
@@ -290,9 +385,7 @@ export default function Home() {
           setPredictionStatus('Results Available');
         }
         
-        // Check if current user already made a prediction for this question
         checkUserPrediction(questionDoc.id);
-        
       } else {
         console.log('No questions found for this game');
         setCurrentQuestionId(null);
@@ -344,7 +437,7 @@ export default function Home() {
     }
   }, [currentQuestionId]);
 
-  // MEMOIZED HANDLERS (prevents re-renders)
+  // MEMOIZED HANDLERS
   const handleGameNameChange = useCallback((text: string) => {
     setGameName(text);
   }, []);
@@ -353,7 +446,7 @@ export default function Home() {
     setCurrentView(view);
   }, []);
 
-  //Video URL Functions
+  // Video URL Functions
   const onVideoStateChange = (state: "unstarted" | "ended" | "playing" | "paused" | "buffering" | "cued") => {
     if (state === "playing") {
       setIsVideoPlaying(true);
@@ -392,7 +485,6 @@ export default function Home() {
       
       if (!userSnap.exists()) {
         console.log('Creating new user document');
-        // Create new user with email as name
         const newUserData = {
           uid: user.uid,
           email: user.email,
@@ -421,15 +513,12 @@ export default function Home() {
       console.log(`Updating stats for user ${userId}: correct=${isCorrect}`);
       
       const userRef = doc(db, "users", userId);
-      
-      // Check if user document exists first
       const userSnap = await getDoc(userRef);
       
       if (!userSnap.exists()) {
-        // Create user document if it doesn't exist
         await setDoc(userRef, {
           uid: userId,
-          email: userId, // Will be updated with real email later
+          email: userId,
           name: userId,
           totalPoints: isCorrect ? 10 : 0,
           gamesPlayed: 1,
@@ -441,7 +530,6 @@ export default function Home() {
         });
         console.log(`Created new user document for ${userId}`);
       } else {
-        // Update existing user document
         const updates: any = {
           totalPredictions: increment(1),
           lastPlayed: new Date()
@@ -449,7 +537,7 @@ export default function Home() {
 
         if (isCorrect) {
           updates.correctPredictions = increment(1);
-          updates.totalPoints = increment(10); // 10 points per correct prediction
+          updates.totalPoints = increment(10);
         }
 
         await updateDoc(userRef, updates);
@@ -460,8 +548,7 @@ export default function Home() {
     }
   }, []);
 
-  // ADMIN FUNCTIONS FOR MULTI-DEVICE SUPPORT =====
-  // Ensure only one active game at a time
+  // FIXED: Admin create game with proper validation
   const adminCreateGame = useCallback(async () => {
     if (!gameName.trim()) {
       Alert.alert('Error', 'Please enter a game name!');
@@ -473,30 +560,22 @@ export default function Home() {
     }
 
     try {
-      console.log('Creating new game and closing any existing active games');
+      console.log('Creating new game and checking for existing active games');
       
-      // ADDED: First, close any existing active games to prevent conflicts
-      const activeGamesQuery = query(
-        collection(db, "games"),
-        where("status", "==", "active"),
-        where("createdBy", "==", playerId)
-      );
-      
-      const activeGamesSnapshot = await getDocs(activeGamesQuery);
-      
+      // Check if this admin already has an active game
       const checkAdminQuery = query(
         collection(db, 'games'),
         where('createdBy', '==', playerId),
-        where('status', '==', 'active'),
-      )
+        where('status', '==', 'active')
+      );
 
       const checkAdminSnapshot = await getDocs(checkAdminQuery);
       if (!checkAdminSnapshot.empty) {
-        Alert.alert('Error', 'You already have an active game!');
+        Alert.alert('Error', 'You already have an active game! Please end your current game first.');
         return;
       }
 
-      // Now create the new game
+      // Create the new game
       const videoID = getURLID(gameURL);
       const docRef = await addDoc(collection(db, "games"), {
         name: gameName,
@@ -504,29 +583,29 @@ export default function Home() {
         createdAt: new Date(),
         url: gameURL,
         videoId: videoID,
-        createdBy: playerId, // Track who created the game
+        createdBy: playerId,
       });
+      
+      console.log('✅ Game created successfully with ID:', docRef.id);
       
       setGameName('');
       setGameURL('');
-      setAdminGameOpen(true);
-      Alert.alert('Success', `Game created: ${gameName}. All players can now see this game!`);
+      Alert.alert('Success', `Game "${gameName}" created successfully! All players can now see this game.`);
       
-    } catch (error) {
-      console.error("Error creating game:", error);
-      Alert.alert('Error', 'Failed to create game');
+    } catch (error: any) {
+      console.error("❌ Error creating game:", error);
+      Alert.alert('Error', 'Failed to create game: ' + (error?.message || 'Unknown error'));
     }
   }, [gameName, gameURL, playerId]);
 
-  // Create Question from Template Function =====
-  // This replaces the hardcoded question creation with template-based creation
+  // FIXED: Create question with proper game validation
   const adminCreateQuestionFromTemplate = useCallback(async (templateType: string) => {
-    if (!currentGameId) {
+    // Use admin's current game ID
+    if (!adminCurrentGameId) {
       Alert.alert('Error', 'Create a game first!');
       return;
     }
 
-    // Find the template by type
     const template = questionTemplates.find(t => t.type === templateType);
     if (!template) {
       Alert.alert('Error', 'Template not found!');
@@ -534,12 +613,12 @@ export default function Home() {
     }
 
     try {
-      console.log('🎯 Creating question from template:', template.type);
+      console.log('🎯 Creating question from template:', template.type, 'for game:', adminCurrentGameId);
       
-      // ===== CLOSE EXISTING ACTIVE QUESTIONS =====
+      // Close existing active questions in this admin's game
       const activeQuestionsQuery = query(
         collection(db, "questions"),
-        where("gameId", "==", currentGameId),
+        where("gameId", "==", adminCurrentGameId),
         where("createdBy", "==", playerId),
         where("status", "==", "active")
       );
@@ -554,25 +633,25 @@ export default function Home() {
         console.log('Closed', closePromises.length, 'existing active questions');
       }
 
-      // ===== CREATE NEW QUESTION USING TEMPLATE DATA =====
+      // Create new question
       const docRef = await addDoc(collection(db, "questions"), {
-        gameId: currentGameId,
-        templateId: template.id, // ⭐ Store reference to template (KEY PART!)
-        question: template.text, // Use template text
-        options: template.options.map(opt => opt.optionText), // Extract option text
+        gameId: adminCurrentGameId,
+        templateId: template.id,
+        question: template.text,
+        options: template.options.map(opt => opt.optionText),
         status: "active",
         actual_result: null,
         createdAt: new Date(),
         createdBy: playerId
       });
 
-      
-      Alert.alert('Success', `Question created from template: ${template.type}! All players can see it.`);
-    } catch (error) {
+      console.log('✅ Question created successfully with ID:', docRef.id);
+      Alert.alert('Success', `Question created: ${template.type}! All players can see it.`);
+    } catch (error: any) {
       console.error("❌ Error creating question from template:", error);
-      Alert.alert('Error', 'Failed to create question');
+      Alert.alert('Error', 'Failed to create question: ' + (error?.message || 'Unknown error'));
     }
-  }, [currentGameId, playerId, questionTemplates]);
+  }, [adminCurrentGameId, playerId, questionTemplates]);
 
   const adminCloseQuestion = useCallback(async () => {
     if (!currentQuestionId) {
@@ -581,7 +660,7 @@ export default function Home() {
     }
 
     try {
-      await updateDoc(doc(db, "questions", currentQuestionId), { // CHANGED: using "questions"
+      await updateDoc(doc(db, "questions", currentQuestionId), {
         status: "closed"
       });
       
@@ -601,53 +680,56 @@ export default function Home() {
       const querySnapshot = await getDocs(q);
 
       const names: string[] = [];
+      const games: Game[] = [];
       querySnapshot.forEach((doc) => {
         const data = doc.data();
         if (data.name) {
           names.push(data.name);
+          games.push({
+            id: doc.id,
+            ...data
+          } as Game);
         }
       });
 
       setGameNames(names);
+      setAllGames(games);
     } catch (error) {
       console.error('Error fetching active games:', error);
     }
   }, []);
 
+  // FIXED: Join game functionality
   const joinGameButton = useCallback(async (gameName: string) => {
     try {
-      const gamesRef = collection(db, 'games');
-      const q = query(gamesRef, where('name', '==', gameName));
-      const querySnapshot = await getDocs(q);
-      const gameDoc = querySnapshot.docs[0];
-      if (!gameDoc) { 
+      console.log('Player attempting to join game:', gameName);
+      
+      // Find the game in our allGames array
+      const selectedGame = allGames.find(game => game.name === gameName);
+      
+      if (!selectedGame) {
         console.log(`Game not found: ${gameName}`);
         Alert.alert('Error', `Game not found: ${gameName}`);
         return;
       }
 
-      if (!querySnapshot.empty) {
-        // Get the first matching document's data
-        const docData = querySnapshot.docs[0].data();
-        if (docData.url) {
-          setCurrentGameURL(docData.url);
-          setCurrentGameId(gameDoc.id);
-          setCurrentGame(gameName);
-          setPlayerSelectedGame(gameName);
-          setPlayerSelectedGameURL(docData.url);
-          setCurrentView('player');
-          
-          console.log('attempting to change game')
-        } else {
-          console.log(`No URL found for game ${gameName}`);
-        }
-      } else {
-        console.log(`Game not found: ${gameName}`);
-      }
+      console.log('Found game:', selectedGame);
+      
+      // Set the player's current game
+      setCurrentGameId(selectedGame.id);
+      setCurrentGame(selectedGame.name);
+      setCurrentGameURL(selectedGame.url || '');
+      setPlayerSelectedGame(selectedGame.name);
+      setPlayerSelectedGameURL(selectedGame.url || '');
+      setCurrentView('player');
+      
+      Alert.alert('Success', `Joined game: ${gameName}`);
+      
     } catch (error) {
-      console.error('Error fetching game URL:', error);
+      console.error('Error joining game:', error);
+      Alert.alert('Error', 'Failed to join game');
     }
-  }, []);
+  }, [allGames]);
 
   useEffect(() => {
     fetchActiveGames();
@@ -659,29 +741,20 @@ export default function Home() {
     setRefreshing(false);
   };
 
+  // FIXED: End game functionality
   const adminEndedGame = useCallback(async () => {
     console.log('=== END GAME CLICKED ===');
-    console.log('Current Game ID:', currentGameId);
+    console.log('Admin Current Game ID:', adminCurrentGameId);
     
-    if (!currentGameId) {
-      Alert.alert('Error', 'No active game!');
-      console.log(currentGameId)
+    if (!adminCurrentGameId) {
+      Alert.alert('Error', 'No active game to end!');
       return;
     }
-    const checkAdminQuery = query(
-      collection(db, 'games'), 
-      where('createdBy', '==', playerId),
-      where('status', '==', 'active'),
-    );
-    const checkAdminSnapshot = await getDocs(checkAdminQuery);
-    if (checkAdminSnapshot.empty) {
-      Alert.alert('Error', 'You are not the game master for this game!');
-      return;
-    }
+
     try {
-      console.log('Attempting to close game:', currentGameId);
+      console.log('Attempting to close game:', adminCurrentGameId);
       
-      const gameRef = doc(db, "games", currentGameId);
+      const gameRef = doc(db, "games", adminCurrentGameId);
       
       // Check if game exists first
       const gameSnap = await getDoc(gameRef);
@@ -691,25 +764,28 @@ export default function Home() {
         return;
       }
       
+      // Verify this admin owns this game
+      const gameData = gameSnap.data();
+      if (gameData.createdBy !== playerId) {
+        Alert.alert('Error', 'You can only end games you created!');
+        return;
+      }
       
-      console.log('Game exists, updating status...');
+      console.log('Game exists and belongs to admin, updating status...');
       await updateDoc(gameRef, {
-        status: "closed",
+        status: "ended",
         endedAt: new Date(),
         endedBy: playerId
       });
 
-      console.log('Game status updated successfully');
-      
-      Alert.alert('Success', 'Game ended for all players! Everything has been reset.');
-      setAdminGameOpen(false);
-      
+      console.log('✅ Game status updated successfully');
+      Alert.alert('Success', 'Game ended successfully! All players have been notified.');
       
     } catch (error: any) {
-      console.error("Error ending game:", error);
+      console.error("❌ Error ending game:", error);
       Alert.alert('Error', 'Failed to end game: ' + (error?.message || 'Unknown error'));
     }
-  }, [currentGameId, playerId]);
+  }, [adminCurrentGameId, playerId]);
 
   const adminSetAnswer = useCallback(async (answer: string) => {
     if (!currentQuestionId) {
@@ -718,7 +794,7 @@ export default function Home() {
     }
 
     try {
-      await updateDoc(doc(db, "questions", currentQuestionId), { // CHANGED: using "questions"
+      await updateDoc(doc(db, "questions", currentQuestionId), {
         actual_result: answer,
         status: "finished"
       });
@@ -757,12 +833,10 @@ export default function Home() {
           winners++;
         }
         
-        // Update user stats for each player
         const updatePromise = updateUserStats(guess.playerId, isCorrect, currentGameId || '');
         updatePromises.push(updatePromise);
       });
 
-      // Wait for all user stat updates to complete
       await Promise.all(updatePromises);
 
       Alert.alert(
@@ -776,7 +850,7 @@ export default function Home() {
     }
   }, [currentQuestionId, correctAnswer, currentGameId, updateUserStats]);
 
-  // PLAYER FUNCTIONS (unchanged)
+  // PLAYER FUNCTIONS
   const playerMakePrediction = useCallback(async (choice: string) => {
     if (!currentQuestionId) {
       Alert.alert('Error', 'No active question!');
@@ -793,7 +867,6 @@ export default function Home() {
       return;
     }
 
-    // ADDED: Check if user already made a prediction
     if (userPrediction !== '') {
       Alert.alert('Error', 'You have already made a prediction for this question!');
       return;
@@ -801,29 +874,28 @@ export default function Home() {
 
     try {
       const guessQuery = query(
-      collection(db, "guesses"),
-      where("questionId", "==", currentQuestionId),
-      where("playerId", "==", playerId)
-    );
-    const guessSnapshot = await getDocs(guessQuery);
+        collection(db, "guesses"),
+        where("questionId", "==", currentQuestionId),
+        where("playerId", "==", playerId)
+      );
+      const guessSnapshot = await getDocs(guessQuery);
 
-    if (!guessSnapshot.empty) {
-      // Update the existing guess
-      const guessDoc = guessSnapshot.docs[0];
-      await updateDoc(doc(db, "guesses", guessDoc.id), {
-        prediction: choice,
-        timestamp: new Date()
-      });
-    } else {
-      await addDoc(collection(db, "guesses"), {
-        prediction: choice,
-        questionId: currentQuestionId,
-        playerId: playerId, // Use actual user ID
-        playerEmail: currentUser?.email, // Store email for reference
-        userName: currentUser?.userName,
-        timestamp: new Date()
-      });
-    }
+      if (!guessSnapshot.empty) {
+        const guessDoc = guessSnapshot.docs[0];
+        await updateDoc(doc(db, "guesses", guessDoc.id), {
+          prediction: choice,
+          timestamp: new Date()
+        });
+      } else {
+        await addDoc(collection(db, "guesses"), {
+          prediction: choice,
+          questionId: currentQuestionId,
+          playerId: playerId,
+          playerEmail: currentUser?.email || null,
+          userName: currentUserData?.userName || currentUserData?.firstName || currentUser?.email || `Player_${playerId.slice(0, 6)}`,
+          timestamp: new Date()
+        });
+      }
       setUserPrediction(choice);
 
       Alert.alert('Success', `Your prediction: ${choice} has been submitted!`);
@@ -834,7 +906,7 @@ export default function Home() {
     }
   }, [currentQuestionId, predictionStatus, playerId, currentUser, userPrediction]);
 
-  // Real-time data loading (unchanged)
+  // Real-time data loading
   const loadGuessesRealTime = useCallback(() => {
     if (!currentQuestionId) return;
 
@@ -869,7 +941,7 @@ export default function Home() {
   return (
     <SafeAreaView style={styles.app}>
       
-      {/* View Toggle - only show if user is admin */}
+      {/* View Toggle */}
       {isGameMasterAccount === true ? (
         <View style={styles.toggleContainer}>
           <TouchableOpacity 
@@ -897,8 +969,9 @@ export default function Home() {
             </Text>
           </TouchableOpacity>
         </View>
-      ) : <View style={styles.toggleContainer}>
-                  <TouchableOpacity 
+      ) : (
+        <View style={styles.toggleContainer}>
+          <TouchableOpacity 
             style={[styles.toggleButton, currentView === 'games' && styles.activeToggle]}
             onPress={() => handleViewChange('games')}
           >
@@ -914,8 +987,8 @@ export default function Home() {
               🎯 Player
             </Text>
           </TouchableOpacity>
-        
-        </View>}
+        </View>
+      )}
 
       {isGameMasterAccount && currentView === 'gamemaster' ? (
         // ADMIN VIEW
@@ -931,9 +1004,12 @@ export default function Home() {
           <Text style={styles.title}>🔧 GAMEMASTER PANEL</Text>
           <Text style={styles.welcomeText}>Welcome, {currentUser?.email}!</Text>
           
-          {adminGameOpen === false  ? (
+          {!adminGameOpen ? (
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Step 1: Create Game</Text>
+              <Text style={styles.infoText}>
+                📌 You can only have one active game at a time
+              </Text>
 
               <TextInput
                 style={styles.input}
@@ -947,7 +1023,7 @@ export default function Home() {
 
               <TextInput 
                 style={styles.input} 
-                placeholder="Game URL" 
+                placeholder="Game URL (YouTube link)" 
                 value={gameURL}
                 onChangeText={setGameURL} 
                 placeholderTextColor="#7f8c8d" 
@@ -959,20 +1035,31 @@ export default function Home() {
                 <Text style={styles.buttonText}>🎮 Create Game</Text>
               </TouchableOpacity>
             </View>
-          ) : null}
-
-          {currentGameURL !== "" && (
+          ) : (
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Game Play</Text>
-              {adminGameOpen === true ? 
-              <>
+              <Text style={styles.sectionTitle}>Your Active Game</Text>
+              <Text style={styles.gameStatusText}>
+                🎮 Game: {currentGame}
+              </Text>
+              <Text style={styles.gameStatusText}>
+                🆔 Game ID: {adminCurrentGameId}
+              </Text>
+            </View>
+          )}
+
+          {currentGameURL !== "" && adminGameOpen && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Game Stream Control</Text>
               <YoutubePlayer
                 height={200}
                 play={isVideoPlaying}
                 videoId={getURLID(currentGameURL)}
                 onChangeState={onVideoStateChange}
-              /> <TouchableOpacity style={styles.primaryButton} onPress={togglePlaying}>
-                <Text style={styles.buttonText}>▶️ {isVideoPlaying ? "Pause" : "Play"}</Text>
+              />
+              <TouchableOpacity style={styles.primaryButton} onPress={togglePlaying}>
+                <Text style={styles.buttonText}>
+                  {isVideoPlaying ? "⏸️ Pause" : "▶️ Play"}
+                </Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.dangerButton}
@@ -984,70 +1071,69 @@ export default function Home() {
               >
                 <Text style={styles.buttonText}>♻️ Remove Video</Text>
               </TouchableOpacity>
-              </>
-              : null}
-
-
- 
             </View>
           )}
 
-          {/* ===== CLEAN: Create Questions from Templates ===== */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Step 2: Create Question</Text>
-            
-            {/* Question Creation Buttons */}
-            {questionTemplates.length === 0 ? (
-              <Text style={styles.statusText}>📥 Loading templates...</Text>
-            ) : (
-              questionTemplates.map((template) => (
-                <TouchableOpacity 
-                  key={template.id}
-                  style={styles.adminButton} 
-                  onPress={() => adminCreateQuestionFromTemplate(template.type)}
-                >
-                  <Text style={styles.buttonText}>
-                    {template.type === 'field_goal' && '🥅 '}
-                    {template.type === 'coin_flip' && '🪙 '}
-                    {template.type === 'next_play' && '🏈 '}
-                    {template.text}
-                  </Text>
-                </TouchableOpacity>
-              ))
-            )}
-          </View>
-
-
+          {/* Create Questions from Templates */}
+          {adminGameOpen && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Step 2: Create Question</Text>
+              <Text style={styles.infoText}>
+                📝 Creating a new question will close any active question
+              </Text>
+              
+              {questionTemplates.length === 0 ? (
+                <Text style={styles.statusText}>📥 Loading templates...</Text>
+              ) : (
+                questionTemplates.map((template) => (
+                  <TouchableOpacity 
+                    key={template.id}
+                    style={styles.adminButton} 
+                    onPress={() => adminCreateQuestionFromTemplate(template.type)}
+                  >
+                    <Text style={styles.buttonText}>
+                      {template.type === 'field_goal' && '🥅 '}
+                      {template.type === 'coin_flip' && '🪙 '}
+                      {template.type === 'next_play' && '🏈 '}
+                      {template.type === 'drive_result' && '🎯 '}
+                      {template.type === 'qb_action' && '🏃 '}
+                      {template.text}
+                    </Text>
+                  </TouchableOpacity>
+                ))
+              )}
+            </View>
+          )}
 
           {/* Control Game */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Step 3: Control Game</Text>
-            
-            <TouchableOpacity style={styles.dangerButton} onPress={adminCloseQuestion}>
-              <Text style={styles.buttonText}>🛑 Close Predictions</Text>
-            </TouchableOpacity>
-            
-            {currentGameId !== null ? (
+          {adminGameOpen && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Step 3: Control Game</Text>
+              
+              <TouchableOpacity style={styles.warningButton} onPress={adminCloseQuestion}>
+                <Text style={styles.buttonText}>🛑 Close Predictions</Text>
+              </TouchableOpacity>
+              
+              <Text style={styles.subTitle}>Set Answer:</Text>
+              {questionOptions.map((option, index) => (
+                <TouchableOpacity 
+                  key={`answer-${option}-${index}`}
+                  style={styles.successButton} 
+                  onPress={() => adminSetAnswer(option)}
+                >
+                  <Text style={styles.buttonText}>✅ Answer: {option}</Text>
+                </TouchableOpacity>
+              ))}
+              
+              <TouchableOpacity style={styles.primaryButton} onPress={adminCalculateWinners}>
+                <Text style={styles.buttonText}>🏆 Calculate Winners</Text>
+              </TouchableOpacity>
+
               <TouchableOpacity style={styles.dangerButton} onPress={adminEndedGame}>
-                <Text style={styles.buttonText}>🛑 End Game</Text>
+                <Text style={styles.buttonText}>🔚 End Game</Text>
               </TouchableOpacity>
-            ) : null}
-            
-            <Text style={styles.subTitle}>Set Answer:</Text>
-            {questionOptions.map((option, index) => (
-              <TouchableOpacity 
-                key={`answer-${option}-${index}`}
-                style={styles.successButton} 
-                onPress={() => adminSetAnswer(option)}
-              >
-                <Text style={styles.buttonText}>✅ Answer: {option}</Text>
-              </TouchableOpacity>
-            ))}
-            
-            <TouchableOpacity style={styles.primaryButton} onPress={adminCalculateWinners}>
-              <Text style={styles.buttonText}>🏆 Calculate Winners</Text>
-            </TouchableOpacity>
-          </View>
+            </View>
+          )}
 
           {/* Game Status */}
           <View style={styles.statusSection}>
@@ -1057,10 +1143,14 @@ export default function Home() {
             <Text style={styles.statusText}>🔄 Status: {predictionStatus}</Text>
             <Text style={styles.statusText}>✅ Answer: {correctAnswer}</Text>
             <Text style={styles.statusText}>👥 Total Predictions: {allGuesses.length}</Text>
+            <Text style={styles.statusText}>🆔 Game ID: {adminCurrentGameId || 'None'}</Text>
+            <Text style={styles.statusText}>🔢 Question ID: {currentQuestionId || 'None'}</Text>
           </View>
         </ScrollView>
 
-      ) : ( (currentView === 'games' ? <ScrollView 
+      ) : currentView === 'games' ? (
+        // GAMES VIEW
+        <ScrollView 
           style={styles.container}
           keyboardShouldPersistTaps="always"
           refreshControl={
@@ -1070,18 +1160,45 @@ export default function Home() {
         >
           <Text style={styles.title}>📃 Select A Game</Text>
           <Text style={styles.welcomeText}>Welcome, {currentUser?.email}!</Text>
-          {gameNames.map((name, index) => (
-            <TouchableOpacity
-              key={index}
-              style={styles.dangerButton}
-              onPress={() => joinGameButton(name)}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.buttonText}>{name}</Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView> :   
-
+          <Text style={styles.infoText}>
+            🎮 {allGames.length} active games available from all game masters
+          </Text>
+          
+          {allGames.length === 0 ? (
+            <View style={styles.section}>
+              <Text style={styles.noGamesText}>
+                No active games found. 
+                {isGameMasterAccount ? ' Create one in the GM tab!' : ' Wait for a game master to create a game.'}
+              </Text>
+            </View>
+          ) : (
+            allGames.map((game, index) => (
+              <TouchableOpacity
+                key={`${game.id}-${index}`}
+                style={[
+                  styles.gameButton,
+                  playerSelectedGame === game.name && styles.selectedGameButton
+                ]}
+                onPress={() => joinGameButton(game.name)}
+                activeOpacity={0.7}
+              >
+                <View style={styles.gameButtonContent}>
+                  <Text style={styles.gameButtonTitle}>{game.name}</Text>
+                  <Text style={styles.gameButtonSubtitle}>
+                    Created by: {game.createdBy === playerId ? 'You' : `GM ${game.createdBy.slice(0, 6)}`}
+                  </Text>
+                  <Text style={styles.gameButtonTime}>
+                    {game.createdAt ? game.createdAt.toLocaleString() : 'Recently'}
+                  </Text>
+                </View>
+                {playerSelectedGame === game.name && (
+                  <Text style={styles.selectedBadge}>✓ JOINED</Text>
+                )}
+              </TouchableOpacity>
+            ))
+          )}
+        </ScrollView>
+      ) : (
         // PLAYER VIEW
         <ScrollView 
           style={styles.container}
@@ -1094,102 +1211,131 @@ export default function Home() {
           {!playerSelectedGame ? (
             <View style={{ alignItems: 'center', marginTop: 40 }}>
               <Text style={styles.title}>🎯 MAKE PREDICTION</Text>
-              <Text style={styles.welcomeText}>
-                Please select a game from the Games tab to begin.
-              </Text>
+              <Text style={styles.welcomeText}>Welcome, {currentUser?.email}!</Text>
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>📋 Getting Started</Text>
+                <Text style={styles.instructionText}>
+                  1. Go to the Games tab
+                </Text>
+                <Text style={styles.instructionText}>
+                  2. Select an active game
+                </Text>
+                <Text style={styles.instructionText}>
+                  3. Return here to make predictions
+                </Text>
+              </View>
             </View>
           ) : (
             <>
               <Text style={styles.title}>🎯 MAKE PREDICTION</Text>
               <Text style={styles.welcomeText}>Welcome, {currentUser?.email}!</Text>
-              <YoutubePlayer
-                height={200}
-                play={isVideoPlaying}
-                videoId={getURLID(currentGameURL)}
-                onChangeState={onVideoStateChange}
-              />            
+              
+              {currentGameURL && (
+                <View style={styles.section}>
+                  <YoutubePlayer
+                    height={200}
+                    play={isVideoPlaying}
+                    videoId={getURLID(currentGameURL)}
+                    onChangeState={onVideoStateChange}
+                  />
+                  <TouchableOpacity style={styles.primaryButton} onPress={togglePlaying}>
+                    <Text style={styles.buttonText}>
+                      {isVideoPlaying ? "⏸️ Pause" : "▶️ Play"}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              )}
           
-          {/* Game Info */}
-          <View style={styles.gameInfo}>
-            <Text style={styles.gameText}>🏈 {currentGame}</Text>
-            <Text style={[styles.statusBadge, 
-              predictionStatus === 'Predictions OPEN' ? styles.openStatus : styles.closedStatus
-            ]}>
-              {predictionStatus}
-            </Text>
-          </View>
-
-          {/* Question */}
-          <View style={styles.questionSection}>
-            <Text style={styles.questionText}>{currentQuestion}</Text>
-            
-            {/* Prediction Buttons */}
-            {predictionStatus === 'Predictions OPEN' && questionOptions.map((option, index) => (
-              <TouchableOpacity 
-                key={`predict-${option}-${index}`}
-                style={[styles.predictButton, userPrediction === option && styles.selectedButton]} 
-                onPress={() => playerMakePrediction(option)}
-                disabled={userPrediction !== ''} // ADDED: Disable if user already predicted
-              >
-                <Text style={styles.buttonText}>
-                  {option} {userPrediction === option && '✓'}
+              {/* Game Info */}
+              <View style={styles.gameInfo}>
+                <Text style={styles.gameText}>🏈 {currentGame}</Text>
+                <Text style={[styles.statusBadge, 
+                  predictionStatus === 'Predictions OPEN' ? styles.openStatus : styles.closedStatus
+                ]}>
+                  {predictionStatus}
                 </Text>
-              </TouchableOpacity>
-            ))}
-            
-            {predictionStatus === 'Predictions CLOSED' && (
-              <Text style={styles.closedText}>🛑 Predictions are closed. Waiting for results...</Text>
-            )}
-            
-            {userPrediction !== '' && (
-              <View style={styles.userChoiceContainer}>
-                <Text style={styles.userChoice}>Your prediction: {userPrediction}</Text>
               </View>
-            )}
-          </View>
 
-          {/* All Guesses */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>
-              👥 All Predictions ({allGuesses.length})
-            </Text>
-            {allGuesses.length === 0 ? (
-              <Text style={styles.noGuessesText}>No predictions yet. Be the first!</Text>
-            ) : (
-              allGuesses.map((guess, index) => {
-                const isCorrect = correctAnswer !== 'Not set' && guess.prediction === correctAnswer;
-                const isWrong = correctAnswer !== 'Not set' && guess.prediction !== correctAnswer;
-                const isCurrentUser = guess.playerId === playerId;
+              {/* Question */}
+              <View style={styles.questionSection}>
+                <Text style={styles.questionText}>{currentQuestion}</Text>
                 
-                return (
-                  <View key={`guess-${guess.id}-${index}`} style={[
-                    styles.guessItem,
-                    isCorrect && styles.correctGuess,
-                    isWrong && styles.wrongGuess,
-                    isCurrentUser && styles.currentUserGuess
-                  ]}>
-                    <Text style={styles.guessText}>
-                      {isCurrentUser ? '👤 You' : (guess.playerEmail || guess.playerId)}: {guess.prediction}
-                      {isCorrect && ' ✅'}
-                      {isWrong && ' ❌'}
-                      {correctAnswer === 'Not set' && ' ⏳'}
+                {/* Prediction Buttons */}
+                {predictionStatus === 'Predictions OPEN' && questionOptions.map((option, index) => (
+                  <TouchableOpacity 
+                    key={`predict-${option}-${index}`}
+                    style={[styles.predictButton, userPrediction === option && styles.selectedButton]} 
+                    onPress={() => playerMakePrediction(option)}
+                    disabled={userPrediction !== ''}
+                  >
+                    <Text style={styles.buttonText}>
+                      {option} {userPrediction === option && '✓'}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+                
+                {predictionStatus === 'Predictions CLOSED' && (
+                  <Text style={styles.closedText}>🛑 Predictions are closed. Waiting for results...</Text>
+                )}
+                
+                {userPrediction !== '' && (
+                  <View style={styles.userChoiceContainer}>
+                    <Text style={styles.userChoice}>Your prediction: {userPrediction}</Text>
+                  </View>
+                )}
+              </View>
+
+              {/* All Guesses */}
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>
+                  👥 All Predictions ({allGuesses.length})
+                </Text>
+                {allGuesses.length === 0 ? (
+                  <Text style={styles.noGuessesText}>No predictions yet. Be the first!</Text>
+                ) : (
+                  allGuesses.map((guess, index) => {
+                    const isCorrect = correctAnswer !== 'Not set' && guess.prediction === correctAnswer;
+                    const isWrong = correctAnswer !== 'Not set' && guess.prediction !== correctAnswer;
+                    const isCurrentUser = guess.playerId === playerId;
+                    
+                    return (
+                      <View key={`guess-${guess.id}-${index}`} style={[
+                        styles.guessItem,
+                        isCorrect && styles.correctGuess,
+                        isWrong && styles.wrongGuess,
+                        isCurrentUser && styles.currentUserGuess
+                      ]}>
+                        <Text style={styles.guessText}>
+                          {isCurrentUser ? '👤 You' : (guess.playerEmail || guess.playerId)}: {guess.prediction}
+                          {isCorrect && ' ✅'}
+                          {isWrong && ' ❌'}
+                          {correctAnswer === 'Not set' && ' ⏳'}
+                        </Text>
+                      </View>
+                    );
+                  })
+                )}
+                
+                {correctAnswer !== 'Not set' && (
+                  <View style={styles.correctAnswerBox}>
+                    <Text style={styles.correctAnswerText}>
+                      🎯 Correct Answer: {correctAnswer}
                     </Text>
                   </View>
-                );
-              })
-            )}
-            
-            {correctAnswer !== 'Not set' && (
-              <View style={styles.correctAnswerBox}>
-                <Text style={styles.correctAnswerText}>
-                  🎯 Correct Answer: {correctAnswer}
-                </Text>
+                )}
               </View>
-            )}
-          </View>
-          </>
+
+              {/* Debug Info */}
+              <View style={styles.debugSection}>
+                <Text style={styles.debugTitle}>🔧 Debug Info</Text>
+                <Text style={styles.debugText}>Selected Game: {playerSelectedGame}</Text>
+                <Text style={styles.debugText}>Current Game ID: {currentGameId}</Text>
+                <Text style={styles.debugText}>Question ID: {currentQuestionId}</Text>
+                <Text style={styles.debugText}>Player ID: {playerId}</Text>
+              </View>
+            </>
           )}
-        </ScrollView>)
+        </ScrollView>
       )}
     </SafeAreaView>
   );
@@ -1217,6 +1363,21 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     color: '#7f8c8d',
     fontStyle: 'italic',
+  },
+  infoText: {
+    fontSize: 14,
+    textAlign: 'center',
+    marginBottom: 15,
+    color: '#34495e',
+    backgroundColor: '#e8f4fd',
+    padding: 10,
+    borderRadius: 8,
+  },
+  instructionText: {
+    fontSize: 16,
+    color: '#34495e',
+    marginBottom: 8,
+    paddingLeft: 10,
   },
   section: {
     backgroundColor: 'white',
@@ -1273,6 +1434,13 @@ const styles = StyleSheet.create({
   },
   dangerButton: {
     backgroundColor: '#c0392b',
+    padding: 18,
+    borderRadius: 12,
+    marginBottom: 12,
+    alignItems: 'center',
+  },
+  warningButton: {
+    backgroundColor: '#f39c12',
     padding: 18,
     borderRadius: 12,
     marginBottom: 12,
@@ -1343,6 +1511,12 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#2c3e50',
     marginBottom: 10,
+  },
+  gameStatusText: {
+    fontSize: 16,
+    color: '#34495e',
+    marginBottom: 5,
+    fontWeight: '600',
   },
   statusBadge: {
     fontSize: 16,
@@ -1450,6 +1624,13 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
     padding: 20,
   },
+  noGamesText: {
+    fontSize: 16,
+    color: '#7f8c8d',
+    textAlign: 'center',
+    fontStyle: 'italic',
+    padding: 20,
+  },
   correctAnswerBox: {
     backgroundColor: '#fff3cd',
     padding: 15,
@@ -1464,13 +1645,71 @@ const styles = StyleSheet.create({
     color: '#856404',
     textAlign: 'center',
   },
-  // ===== NEW: Template Management Styles =====
-  templateInfo: {
+  gameButton: {
+    backgroundColor: 'white',
+    padding: 20,
+    borderRadius: 15,
+    marginBottom: 15,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 5,
+    borderLeftWidth: 4,
+    borderLeftColor: '#3498db',
+  },
+  selectedGameButton: {
+    borderLeftColor: '#27ae60',
+    backgroundColor: '#f8fff8',
+  },
+  gameButtonContent: {
+    flex: 1,
+  },
+  gameButtonTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#2c3e50',
+    marginBottom: 5,
+  },
+  gameButtonSubtitle: {
+    fontSize: 14,
+    color: '#7f8c8d',
+    marginBottom: 3,
+  },
+  gameButtonTime: {
+    fontSize: 12,
+    color: '#95a5a6',
+  },
+  selectedBadge: {
+    position: 'absolute',
+    top: 15,
+    right: 15,
+    backgroundColor: '#27ae60',
+    color: 'white',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  debugSection: {
     backgroundColor: '#f8f9fa',
     padding: 15,
     borderRadius: 10,
     marginTop: 10,
     borderLeftWidth: 4,
-    borderLeftColor: '#17a2b8',
+    borderLeftColor: '#6c757d',
+  },
+  debugTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 10,
+    color: '#495057',
+  },
+  debugText: {
+    fontSize: 12,
+    color: '#6c757d',
+    marginBottom: 3,
+    fontFamily: 'monospace',
   },
 });
