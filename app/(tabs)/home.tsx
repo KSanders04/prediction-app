@@ -85,6 +85,9 @@ export default function Home() {
   const [currentGameURL, setCurrentGameURL] = useState('');
   const [isVideoPlaying, setIsVideoPlaying] = useState(true);
   const [questionTemplates, setQuestionTemplates] = useState<QuestionTemplate[]>([]);
+  const [playerSelectedGame, setPlayerSelectedGame] = useState<string | null>(null);
+  const [playerSelectedGameURL, setPlayerSelectedGameURL] = useState<string | null>(null);
+
 
   // This creates the questionTemplates collection in Firebase if it doesn't exist
   const initializeQuestionTemplates = useCallback(async () => {
@@ -207,8 +210,8 @@ export default function Home() {
     
     console.log('Setting up real-time listeners for all games and questions');
     
-    // Listen for active games in real-time
-    const gamesQuery = query(
+    if (isGameMasterAccount) {
+      const gamesQuery = query(
       collection(db, "games"),
       where("status", "==", "active"),
     );
@@ -248,7 +251,8 @@ export default function Home() {
       console.log('Cleaning up real-time game listeners');
       unsubscribeGames();
     };
-  }, [playerId]); // Run when playerId changes (user logs in)
+  }
+  }, [playerId, isGameMasterAccount]); // Run when playerId changes (user logs in)
 
   // ===== EXISTING: Listen for active questions in real-time =====
   const listenForActiveQuestions = useCallback((gameId: string) => {
@@ -611,8 +615,12 @@ export default function Home() {
         const docData = querySnapshot.docs[0].data();
         if (docData.url) {
           setCurrentGameURL(docData.url);
-          setCurrentGameId(docData.videoId)
-          setCurrentGame(gameName)
+          setCurrentGameId(docData.videoId);
+          setCurrentGame(gameName);
+          setPlayerSelectedGame(gameName);
+          setPlayerSelectedGameURL(docData.url);
+          setCurrentView('player');
+          
           console.log('attempting to change game')
         } else {
           console.log(`No URL found for game ${gameName}`);
@@ -783,6 +791,7 @@ export default function Home() {
         questionId: currentQuestionId,
         playerId: playerId, // Use actual user ID
         playerEmail: currentUser?.email, // Store email for reference
+        userName: currentUser?.userName,
         timestamp: new Date()
       });
     }
@@ -1049,17 +1058,23 @@ export default function Home() {
           }
           showsVerticalScrollIndicator={false}
         >
-          <Text style={styles.title}>🎯 MAKE PREDICTION</Text>
-          <Text style={styles.welcomeText}>Welcome, {currentUser?.email}!</Text>
-
-          {currentGameURL !== "" && (
+          {!playerSelectedGame ? (
+            <View style={{ alignItems: 'center', marginTop: 40 }}>
+              <Text style={styles.title}>🎯 MAKE PREDICTION</Text>
+              <Text style={styles.welcomeText}>
+                Please select a game from the Games tab to begin.
+              </Text>
+            </View>
+          ) : (
+            <>
+              <Text style={styles.title}>🎯 MAKE PREDICTION</Text>
+              <Text style={styles.welcomeText}>Welcome, {currentUser?.email}!</Text>
               <YoutubePlayer
                 height={200}
                 play={isVideoPlaying}
                 videoId={getURLID(currentGameURL)}
                 onChangeState={onVideoStateChange}
-              />
-            )}
+              />            
           
           {/* Game Info */}
           <View style={styles.gameInfo}>
@@ -1139,6 +1154,8 @@ export default function Home() {
               </View>
             )}
           </View>
+          </>
+          )}
         </ScrollView>)
       )}
     </SafeAreaView>
