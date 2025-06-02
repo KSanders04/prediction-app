@@ -12,7 +12,7 @@ export default function Profile() {
   const [userData, setUserData] = useState({
     name: '', firstName: '', lastName: '', userName: '', profilePic: '',
     totalPoints: 0, correctPredictions: 0, totalPredictions: 0, gamesPlayed: 0, lastPlayed: null,
-    groups: [], // <-- add this
+    groups: [],
   });
   const [uploading, setUploading] = useState(false);
   const [authUser, setAuthUser] = useState<any>(null);
@@ -41,7 +41,7 @@ export default function Profile() {
           totalPredictions: data.totalPredictions || 0,
           gamesPlayed: data.gamesPlayed || 0,
           lastPlayed: data.lastPlayed || null,
-          groups: data.groups || [], // <-- add this
+          groups: data.groups || [], // Ensure groups is an array
         });
       }
     };
@@ -169,7 +169,7 @@ export default function Profile() {
               </Text>
               <Text style={styles.statLabel}>Groups</Text>
             </View>
-            {/* Edit Username Button beside Friends/Groups */}
+            {}
             <TouchableOpacity
               style={styles.editUsernameButton}
               onPress={() => {
@@ -181,7 +181,7 @@ export default function Profile() {
             </TouchableOpacity>
           </View>
 
-          {/* Username edit input appears below name if editing */}
+          {}
           {editingUsername && (
             <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 20, marginBottom: -20 }}>
               <TextInput
