@@ -4,6 +4,7 @@ import React from "react";
 
 
 interface User {
+  userName: string,
   totalPoints: number;
   correctPredictions: number;
   totalPredictions: number;
@@ -28,7 +29,7 @@ export const UserStats: React.FC<{
 }) => (
   <View style={styles.currentUserSection}>
     <Text style={styles.sectionTitle}>📊 Your Stats</Text>
-    <Text style={styles.userEmail}>{authUser?.email}</Text>
+    <Text style={styles.userEmail}>{currentUser.userName}</Text>
     <View style={styles.statsGrid}>
       <View style={styles.statCard}>
         <Text style={styles.statValue}>{getCurrentUserRank() || '--'}</Text>

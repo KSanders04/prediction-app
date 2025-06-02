@@ -166,7 +166,7 @@ export default function LeaderboardScreen() {
         users.push({ 
           id: doc.id, 
           userName: userData.userName || `User_${doc.id.slice(0, 6)}`,
-          name: userData.userName || userData.email || userData.name || userData.uid || `User_${doc.id.slice(0, 6)}`,
+          name: userData.userName || `User_${doc.id.slice(0, 6)}`,
           email: userData.email,
           totalPoints: userData.totalPoints || 0,
           gamesPlayed: userData.gamesPlayed || 0,
@@ -302,7 +302,7 @@ export default function LeaderboardScreen() {
                   
                   <View style={styles.playerInfo}>
                     <Text style={[styles.playerName, isCurrentUser && styles.currentUserName]}>
-                      {isCurrentUser ? '👤 You' : user.userName || user.name}
+                      {isCurrentUser ? '👤 You' : user.userName || `User_${user.id.slice(0, 6)}`}
                     </Text>
                     <Text style={styles.playerStats}>
                       {user.gamesPlayed} games • {getAccuracy(user.correctPredictions, user.totalPredictions)}% accuracy
