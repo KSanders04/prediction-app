@@ -198,30 +198,38 @@ const joinGroupButton = async () => {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Enter Group Code</Text>
-            <TextInput
-              style={styles.textInput}
-              placeholder="CODE"
-              value={code}
-              onChangeText={setCode}
-            />
-      <TouchableOpacity style={styles.button} onPress={joinGroupButton}>
-        <Text style={styles.buttonText}>Join Group</Text>
-      </TouchableOpacity>
-      <TouchableOpacity style={styles.button} onPress={createGroupButton}>
-        <Text style={styles.buttonText}>Create Group</Text>
-      </TouchableOpacity>
-      <TouchableOpacity style={styles.button} onPress={closeGroupButton}>
-        <Text style={styles.buttonText}>Close Group</Text>
-      </TouchableOpacity>
+      <Text style={styles.title}>Groups</Text>
+      <Text style={styles.welcomeText}>Welcome, {currentUser?.email}</Text>
+      
+      <View style={styles.section}>
+        <TextInput
+          style={styles.textInput}
+          placeholder="Enter Group Code"
+          value={code}
+          onChangeText={setCode}
+          placeholderTextColor="#7f8c8d"
+        />
+        
+        <TouchableOpacity style={styles.button} onPress={joinGroupButton}>
+          <Text style={styles.buttonText}>Join Group</Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity style={styles.button} onPress={createGroupButton}>
+          <Text style={styles.buttonText}>Create Group</Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity style={styles.button} onPress={closeGroupButton}>
+          <Text style={styles.buttonText}>Close Group</Text>
+        </TouchableOpacity>
+        
         <TouchableOpacity style={styles.button} onPress={leaveGroupButton}>
-        <Text style={styles.buttonText}>Leave Group</Text>
-      </TouchableOpacity>
-
-
+          <Text style={styles.buttonText}>Leave Group</Text>
+        </TouchableOpacity>
+      </View>
     </View>
   );
-};
+
+}
 
 export default SelectedMode;
 
@@ -237,35 +245,120 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: "700",
     marginBottom: 40,
+    color: '#2c3e50',
+    textAlign: 'center',
   },
   button: {
     width: "90%",
     padding: 20,
-    backgroundColor: "#3949AB",
+    backgroundColor: "#3498db",
     borderRadius: 12,
     marginVertical: 10,
     alignItems: "center",
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 5,
   },
   buttonText: {
     color: "#FFF",
     fontSize: 18,
     fontWeight: "600",
   },
-    textInput: {
+  textInput: {
     height: 50,
     width: "90%",
     backgroundColor: "#FFFFFF",
-    borderColor: "#E8EAF6",
     borderWidth: 2,
-    borderRadius: 15,
+    borderColor: "#ecf0f1",
+    borderRadius: 12,
     marginVertical: 15,
     paddingHorizontal: 25,
     fontSize: 16,
-    color: "#3C4858",
-    shadowColor: "#9E9E9E",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 4,
+    color: "#2c3e50",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 5,
   },
+  section: {
+    backgroundColor: 'white',
+    padding: 20,
+    marginBottom: 15,
+    borderRadius: 15,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 5,
+    width: '90%',
+  },
+  sectionTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 15,
+    color: '#2c3e50',
+  },
+  infoText: {
+    fontSize: 14,
+    textAlign: 'center',
+    marginBottom: 15,
+    color: '#34495e',
+    backgroundColor: '#e8f4fd',
+    padding: 10,
+    borderRadius: 8,
+  },
+  welcomeText: {
+    fontSize: 16,
+    textAlign: 'center',
+    marginBottom: 20,
+    color: '#7f8c8d',
+    fontStyle: 'italic',
+  },
+  gameButton: {
+    backgroundColor: 'white',
+    padding: 20,
+    borderRadius: 15,
+    marginBottom: 15,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 5,
+    borderLeftWidth: 4,
+    borderLeftColor: '#3498db',
+    width: '90%',
+  },
+  selectedGameButton: {
+    borderLeftColor: '#27ae60',
+    backgroundColor: '#f8fff8',
+  },
+  gameButtonContent: {
+    flex: 1,
+  },
+  gameButtonTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#2c3e50',
+    marginBottom: 5,
+  },
+  gameButtonSubtitle: {
+    fontSize: 14,
+    color: '#7f8c8d',
+    marginBottom: 3,
+  },
+  selectedBadge: {
+    position: 'absolute',
+    top: 15,
+    right: 15,
+    backgroundColor: '#27ae60',
+    color: 'white',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    fontSize: 12,
+    fontWeight: 'bold',
+  }
 });
