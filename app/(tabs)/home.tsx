@@ -346,15 +346,17 @@ export default function Home() {
   // NEW: Listen for questions in the selected game (for players)
   useEffect(() => {
     if (currentGameId && !isGameMasterAccount) {
-      console.log('Player listening for questions in game:', currentGameId);
+      console.log('🎯 Player listening for questions in game:', currentGameId);
       const unsubscribe = listenForActiveQuestions(currentGameId);
       return () => unsubscribe && unsubscribe();
     }
-  }, [currentGameId, isGameMasterAccount]);
+  }, [currentGameId, isGameMasterAccount, playerId]); // Added playerId dependency
 
   // Listen for active questions in real-time
   const listenForActiveQuestions = useCallback((gameId: string) => {
-    console.log('Setting up real-time question listener for game:', gameId);
+    console.log('🔍 Setting up real-time question listener for game:', gameId);
+    console.log('🔍 Current user is gamemaster:', isGameMasterAccount);
+    console.log('🔍 Player ID:', playerId);
     
     const questionsQuery = query(
       collection(db, "questions"),
@@ -365,12 +367,15 @@ export default function Home() {
     );
 
     const unsubscribeQuestions = onSnapshot(questionsQuery, (snapshot) => {
+      console.log('📥 Question snapshot received, docs count:', snapshot.docs.length);
+      
       if (!snapshot.empty) {
         const questionDoc = snapshot.docs[0];
         const questionData = questionDoc.data();
         
-        console.log('Found question:', questionData.question);
-        console.log('Question status:', questionData.status);
+        console.log('✅ Found question:', questionData.question);
+        console.log('✅ Question status:', questionData.status);
+        console.log('✅ Question ID:', questionDoc.id);
         
         setCurrentQuestionId(questionDoc.id);
         setCurrentQuestion(questionData.question);
@@ -379,15 +384,18 @@ export default function Home() {
         
         if (questionData.status === "active") {
           setPredictionStatus('Predictions OPEN');
+          console.log('🟢 Predictions are OPEN');
         } else if (questionData.status === "closed") {
           setPredictionStatus('Predictions CLOSED');
+          console.log('🟡 Predictions are CLOSED');
         } else if (questionData.status === "finished") {
           setPredictionStatus('Results Available');
+          console.log('🔴 Results Available');
         }
         
         checkUserPrediction(questionDoc.id);
       } else {
-        console.log('No questions found for this game');
+        console.log('❌ No questions found for this game');
         setCurrentQuestionId(null);
         setCurrentQuestion('Waiting for question...');
         setPredictionStatus('Waiting...');
@@ -396,10 +404,12 @@ export default function Home() {
         setUserPrediction('');
         setAllGuesses([]);
       }
+    }, (error) => {
+      console.error('❌ Error in question listener:', error);
     });
 
     return unsubscribeQuestions;
-  }, [playerId]);
+  }, [playerId, isGameMasterAccount]); // Added isGameMasterAccount dependency
 
   // Check if user already made a prediction
   const checkUserPrediction = useCallback(async (questionId: string) => {
@@ -702,18 +712,20 @@ export default function Home() {
   // FIXED: Join game functionality
   const joinGameButton = useCallback(async (gameName: string) => {
     try {
-      console.log('Player attempting to join game:', gameName);
+      console.log('🎮 Player attempting to join game:', gameName);
+      console.log('🎮 Available games:', allGames.map(g => g.name));
       
       // Find the game in our allGames array
       const selectedGame = allGames.find(game => game.name === gameName);
       
       if (!selectedGame) {
-        console.log(`Game not found: ${gameName}`);
+        console.log(`❌ Game not found: ${gameName}`);
         Alert.alert('Error', `Game not found: ${gameName}`);
         return;
       }
 
-      console.log('Found game:', selectedGame);
+      console.log('✅ Found game:', selectedGame);
+      console.log('✅ Game ID:', selectedGame.id);
       
       // Set the player's current game
       setCurrentGameId(selectedGame.id);
@@ -723,10 +735,13 @@ export default function Home() {
       setPlayerSelectedGameURL(selectedGame.url || '');
       setCurrentView('player');
       
+      console.log('✅ Player successfully joined game:', selectedGame.name);
+      console.log('✅ Current game ID set to:', selectedGame.id);
+      
       Alert.alert('Success', `Joined game: ${gameName}`);
       
     } catch (error) {
-      console.error('Error joining game:', error);
+      console.error('❌ Error joining game:', error);
       Alert.alert('Error', 'Failed to join game');
     }
   }, [allGames]);
@@ -1328,10 +1343,14 @@ export default function Home() {
               {/* Debug Info */}
               <View style={styles.debugSection}>
                 <Text style={styles.debugTitle}>🔧 Debug Info</Text>
+                <Text style={styles.debugText}>Is GameMaster: {isGameMasterAccount ? 'Yes' : 'No'}</Text>
                 <Text style={styles.debugText}>Selected Game: {playerSelectedGame}</Text>
                 <Text style={styles.debugText}>Current Game ID: {currentGameId}</Text>
                 <Text style={styles.debugText}>Question ID: {currentQuestionId}</Text>
                 <Text style={styles.debugText}>Player ID: {playerId}</Text>
+                <Text style={styles.debugText}>Current Question: {currentQuestion}</Text>
+                <Text style={styles.debugText}>Prediction Status: {predictionStatus}</Text>
+                <Text style={styles.debugText}>Question Options: {questionOptions.join(', ')}</Text>
               </View>
             </>
           )}
