@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, View, Text, Image, TouchableOpacity, ActivityIndicator, Alert, ScrollView } from 'react-native';
+import { StyleSheet, View, Text, Image, TouchableOpacity, ActivityIndicator, Alert, ScrollView, TextInput } from 'react-native';
 import { auth, db, storage } from '../../firebaseConfig';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
@@ -7,13 +7,17 @@ import * as ImagePicker from 'expo-image-picker';
 import SignOut from './signout';
 import { UserStats } from '../../components/userStats';
 
+
 export default function Profile() {
   const [userData, setUserData] = useState({
     name: '', firstName: '', lastName: '', userName: '', profilePic: '',
-    totalPoints: 0, correctPredictions: 0, totalPredictions: 0, gamesPlayed: 0, lastPlayed: null
+    totalPoints: 0, correctPredictions: 0, totalPredictions: 0, gamesPlayed: 0, lastPlayed: null,
+    groups: [], // <-- add this
   });
   const [uploading, setUploading] = useState(false);
   const [authUser, setAuthUser] = useState<any>(null);
+  const [editingUsername, setEditingUsername] = useState(false);
+  const [newUsername, setNewUsername] = useState('');
 
   useEffect(() => {
     const fetchUserData = async () => {
@@ -37,6 +41,7 @@ export default function Profile() {
           totalPredictions: data.totalPredictions || 0,
           gamesPlayed: data.gamesPlayed || 0,
           lastPlayed: data.lastPlayed || null,
+          groups: data.groups || [], // <-- add this
         });
       }
     };
@@ -110,6 +115,25 @@ export default function Profile() {
     }
   };
 
+  // Function to handle username update
+  const handleUsernameUpdate = async () => {
+    if (!newUsername.trim()) {
+      Alert.alert('Invalid Username', 'Username cannot be empty.');
+      return;
+    }
+    try {
+      const user = auth.currentUser;
+      if (!user) return;
+      const userRef = doc(db, 'users', user.uid);
+      await updateDoc(userRef, { userName: newUsername.trim() });
+      setUserData((prev) => ({ ...prev, userName: newUsername.trim() }));
+      setEditingUsername(false);
+      Alert.alert('Success', 'Username updated!');
+    } catch (err) {
+      Alert.alert('Error', 'Could not update username.');
+    }
+  };
+
   return (
     <ScrollView 
       style={styles.container}
@@ -130,32 +154,62 @@ export default function Profile() {
             />
           </TouchableOpacity>
 
-          <View style={{ alignItems: 'center', marginBottom: -10 }}>
+          <View style={{ alignItems: 'flex-start', marginBottom: -10 }}>
             <Text style={styles.name}>{userData.firstName} {userData.lastName}</Text>
-            <Text style={styles.id}>{userData.userName}</Text>
           </View>
 
-          <View style={styles.statsContainer}>
+          <View style={[styles.statsContainer, { marginTop: 35, marginBottom: -10 }]}> 
             <View style={styles.statBox}>
               <Text style={styles.statNumber}>0</Text>
               <Text style={styles.statLabel}>Friends</Text>
             </View>
             <View style={styles.statBox}>
-              <Text style={styles.statNumber}>0</Text>
+              <Text style={styles.statNumber}>
+                {userData.groups ? userData.groups.length : 0}
+              </Text>
               <Text style={styles.statLabel}>Groups</Text>
             </View>
+            {/* Edit Username Button beside Friends/Groups */}
+            <TouchableOpacity
+              style={styles.editUsernameButton}
+              onPress={() => {
+                setNewUsername(userData.userName);
+                setEditingUsername(true);
+              }}
+            >
+              <Text style={styles.editUsernameButtonText}>Edit Username</Text>
+            </TouchableOpacity>
           </View>
 
-  <View style={{ marginTop: 10, width: '100%' }}>
-    <UserStats
-      currentUser={userData}
-      authUser={authUser}
-      getCurrentUserRank={getCurrentUserRank}
-      getRankSuffix={getRankSuffix}
-      getAccuracy={getAccuracy}
-      formatLastPlayed={formatLastPlayed}
-    />
-  </View>
+          {/* Username edit input appears below name if editing */}
+          {editingUsername && (
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 20, marginBottom: -20 }}>
+              <TextInput
+                style={styles.usernameInput}
+                value={newUsername}
+                onChangeText={setNewUsername}
+                placeholder="Enter new username"
+                autoFocus
+              />
+              <TouchableOpacity style={styles.saveButton} onPress={handleUsernameUpdate}>
+                <Text style={styles.saveButtonText}>Save</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.cancelButton} onPress={() => setEditingUsername(false)}>
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          <View style={{ marginTop: 10, width: '100%' }}>
+            <UserStats
+              currentUser={userData}
+              authUser={authUser}
+              getCurrentUserRank={getCurrentUserRank}
+              getRankSuffix={getRankSuffix}
+              getAccuracy={getAccuracy}
+              formatLastPlayed={formatLastPlayed}
+            />
+          </View>
           <SignOut />
         </>
       )}
@@ -178,7 +232,7 @@ const styles = StyleSheet.create({
     marginBottom: -50,
     justifyContent: 'center',
     backgroundColor: '#ecf0f1',
-    marginTop: -50,
+    marginTop: -55,
   },
   statsContainer: {
     flexDirection: 'row',
@@ -195,7 +249,7 @@ const styles = StyleSheet.create({
   },
   statLabel: {
     fontSize: 14,
-    color: '#7f8c8d',
+    color: 'black',
   },
   name: {
     fontSize: 24,
@@ -217,5 +271,50 @@ const styles = StyleSheet.create({
   buttonText: {
     color: '#fff',
     fontWeight: '600',
+  },
+  usernameInput: {
+    borderBottomWidth: 1,
+    borderColor: '#3498db',
+    fontSize: 14,
+    padding: 4,
+    color: 'black',
+  },
+  saveButton: {
+    backgroundColor: '#3498db',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 5,
+    marginRight: 5,
+  },
+  saveButtonText: {
+    color: '#fff',
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  cancelButton: {
+    backgroundColor: '#e74c3c',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 5,
+  },
+  cancelButtonText: {
+    color: '#fff',
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  editUsernameButton: {
+    backgroundColor: '#3498db',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 5,
+    alignSelf: 'center',
+    marginLeft: 10,
+    height: 32,
+    justifyContent: 'center',
+  },
+  editUsernameButtonText: {
+    color: '#fff',
+    fontWeight: '600',
+    fontSize: 14,
   },
 });

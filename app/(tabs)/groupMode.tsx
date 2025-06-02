@@ -1,6 +1,7 @@
 import { View, Text, TouchableOpacity, StyleSheet, TextInput } from "react-native";
 import { router } from "expo-router";
 import React from "react";
+import { arrayUnion, arrayRemove } from 'firebase/firestore';
 
 import { collection, addDoc, query, where, getDocs } from 'firebase/firestore';
 import { db, auth } from '../../firebaseConfig';
@@ -69,6 +70,13 @@ const joinGroupButton = async () => {
     await updateDoc(doc(db, 'groups', groupDoc.id), {
       members: updatedMembers
     });
+
+    //update user's groups array in Firestore ---
+    const userRef = doc(db, 'users', currentUser.uid);
+    await updateDoc(userRef, {
+      groups: arrayUnion(groupDoc.id)
+    });
+    // ---------------------------------------------------------
 
     console.log(`✅ User ${currentUser.email} added to group ${code}`);
     alert('Successfully joined the group!');
@@ -184,10 +192,15 @@ const joinGroupButton = async () => {
 
       
       await updateDoc(doc(db, 'groups', groupDoc.id), {
-
         members: groupData.members.filter(member => member !== currentUser.email)
-
       });
+
+      //REMOVE group from user's groups array ---
+      const userRef = doc(db, 'users', currentUser.uid);
+      await updateDoc(userRef, {
+        groups: arrayRemove(groupDoc.id)
+      });
+      // --------------------------------------------
 
       alert('You have successfully left your group.');
       router.push("/home");
