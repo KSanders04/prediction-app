@@ -128,18 +128,32 @@ export default function Profile() {
               }
               style={styles.profileImage}
             />
-          </TouchableOpacity>
-          <Text style={styles.name}>{userData.firstName} {userData.lastName}</Text>
-          <Text style={styles.id}>{userData.userName}</Text>
+            <View style={styles.statsContainer}>
+      <View style={styles.statBox}>
+        <Text style={styles.statNumber}>0</Text>
+        <Text style={styles.statLabel}>Friends</Text>
+      </View>
+      <View style={styles.statBox}>
+        <Text style={styles.statNumber}>0</Text>
+        <Text style={styles.statLabel}>Groups</Text>
+      </View>
+    </View>
+  </TouchableOpacity>
 
-          <UserStats
-            currentUser={userData}
-            authUser={authUser}
-            getCurrentUserRank={getCurrentUserRank}
-            getRankSuffix={getRankSuffix}
-            getAccuracy={getAccuracy}
-            formatLastPlayed={formatLastPlayed}
-          />
+  {/* Wrap these elements to reduce spacing */}
+  <View style={{ alignItems: 'center', marginBottom: -90}}>
+    <Text style={styles.name}>{userData.firstName} {userData.lastName}</Text>
+    <Text style={styles.id}>{userData.userName}</Text>
+  </View>
+
+  <UserStats
+    currentUser={userData}
+    authUser={authUser}
+    getCurrentUserRank={getCurrentUserRank}
+    getRankSuffix={getRankSuffix}
+    getAccuracy={getAccuracy}
+    formatLastPlayed={formatLastPlayed}
+  />
 
           <SignOut />
         </>
@@ -162,6 +176,23 @@ const styles = StyleSheet.create({
     borderRadius: 60,
     marginBottom: 20,
     backgroundColor: '#ecf0f1',
+  },
+  statsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+  },
+  statBox: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  statNumber: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#2c3e50',
+  },
+  statLabel: {
+    fontSize: 14,
+    color: '#7f8c8d',
   },
   name: {
     fontSize: 24,

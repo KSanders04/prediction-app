@@ -13,7 +13,7 @@ const index = () => {
   const emailSignIn = async () => {
     try {
       const user = await signInWithEmailAndPassword(auth, email, password); // take email and password and push to firebase
-      if (user) router.replace("/(tabs)/home"); // if user exists send them to the next page
+      if (user) router.replace("/selectMode"); // if user exists send them to the next page
       const userCredential = user.user
       const userRef = doc(db, 'users', userCredential.uid)
       const userSnap = await getDoc(userRef)
