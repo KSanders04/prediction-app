@@ -65,6 +65,8 @@ interface Game {
   url?: string;
   videoId?: string;
   createdAt: Date;
+  liveViewers?: string[];
+  totalViewers?: string[];
 }
 
 export default function Home() {
@@ -355,7 +357,7 @@ export default function Home() {
   // Listen for active questions in real-time
   const listenForActiveQuestions = useCallback((gameId: string) => {
     console.log('Setting up real-time question listener for game:', gameId);
-    
+
     const questionsQuery = query(
       collection(db, "questions"),
       where("gameId", "==", gameId),
@@ -365,6 +367,7 @@ export default function Home() {
     );
 
     const unsubscribeQuestions = onSnapshot(questionsQuery, (snapshot) => {
+      
       if (!snapshot.empty) {
         const questionDoc = snapshot.docs[0];
         const questionData = questionDoc.data();
@@ -584,6 +587,8 @@ export default function Home() {
         url: gameURL,
         videoId: videoID,
         createdBy: playerId,
+        liveViewers: [],
+        totalViewers: [],
       });
       
       console.log('✅ Game created successfully with ID:', docRef.id);
@@ -714,8 +719,41 @@ export default function Home() {
       }
 
       console.log('Found game:', selectedGame);
+// First, remove user from previous game if exists
+    if (currentGameId) {
+      console.log('Removing user from previous game:', currentGameId);
+      const previousGameRef = doc(db, "games", currentGameId);
+      const previousGameDoc = await getDoc(previousGameRef);
       
-      // Set the player's current game
+      if (previousGameDoc.exists()) {
+        const previousGameData = previousGameDoc.data();
+        const updatedLiveViewers = (previousGameData.liveViewers || [])
+          .filter((email: string) => email !== currentUser.email);
+        
+        await updateDoc(previousGameRef, {
+          liveViewers: updatedLiveViewers
+        });
+        console.log('Removed user from previous game live viewers');
+      }
+    }
+    
+    // Then, add user to new game
+    const gameRef = doc(db, "games", selectedGame.id);
+    const gameDoc = await getDoc(gameRef);
+    
+    if (gameDoc.exists()) {
+      const gameData = gameDoc.data();
+      const liveViewers = Array.from(new Set([...(gameData.liveViewers || []), currentUser.email]));
+      const totalViewers = Array.from(new Set([...(gameData.totalViewers || []), currentUser.email]));
+      
+      await updateDoc(gameRef, {
+        liveViewers,
+        totalViewers
+      });
+      console.log('Added user to new game viewers');
+    }
+
+
       setCurrentGameId(selectedGame.id);
       setCurrentGame(selectedGame.name);
       setCurrentGameURL(selectedGame.url || '');
