@@ -199,8 +199,7 @@ const joinGroupButton = async () => {
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Groups</Text>
-      <Text style={styles.welcomeText}>Welcome, {currentUser?.email}</Text>
-      
+
       <View style={styles.section}>
         <TextInput
           style={styles.textInput}
