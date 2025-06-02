@@ -48,6 +48,23 @@ const index = () => {
       return;
     }
 
+    if (password.length < 6) {
+      alert("Password must be at least 6 characters long.");
+      return;
+    }
+
+      //Check if email exists
+      const emailQuery = query(
+        collection(db, 'users'),
+        where('email', '==', email)
+      );
+      const emailSnapshot = await getDocs(emailQuery);
+
+      if (!emailSnapshot.empty) {
+        alert("That email is already in use. Please choose another.");
+        return;
+      }
+
     //Account Creation
       const user = await createUserWithEmailAndPassword(auth, email, password); // take email and password and push to firebase
       const userCredential = user.user
@@ -70,7 +87,7 @@ const index = () => {
         });
       }
 
-      router.replace("/(tabs)/home")
+      router.replace("/selectMode")
 
     } catch (error: any) {
       console.log(error);
@@ -103,13 +120,13 @@ const index = () => {
         />
         <TextInput
             style={styles.textInput}
-            placeholder="email"
+            placeholder="Email"
             value={email}
             onChangeText={setEmail}
         />
         <TextInput
             style={styles.textInput}
-            placeholder="password"
+            placeholder="Password"
             value={password}
             onChangeText={setPassword}
             secureTextEntry

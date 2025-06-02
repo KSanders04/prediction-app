@@ -3,7 +3,7 @@ import { router } from "expo-router";
 import React from "react";
 
 const SelectedMode = () => {
-  const handleSelect = (mode: "home" | "" | "") => {
+  const handleSelect = (mode: "home" | "groupMode" | "") => {
     router.push(`/${mode}`); //This assumes you have routes like /solo, /groups(empty for now because we do not have group page), /legend(empty string for now because we do not have legend page)
   };
 
@@ -13,7 +13,7 @@ const SelectedMode = () => {
       <TouchableOpacity style={styles.button} onPress={() => handleSelect("home")}>
         <Text style={styles.buttonText}>Solo</Text>
       </TouchableOpacity>
-      <TouchableOpacity style={styles.button} onPress={() => handleSelect("")}>
+      <TouchableOpacity style={styles.button} onPress={() => handleSelect("groupMode")}>
         <Text style={styles.buttonText}>Groups</Text>
       </TouchableOpacity>
       <TouchableOpacity style={styles.button} onPress={() => handleSelect("")}>

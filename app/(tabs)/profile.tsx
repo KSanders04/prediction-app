@@ -128,33 +128,34 @@ export default function Profile() {
               }
               style={styles.profileImage}
             />
-            <View style={styles.statsContainer}>
-      <View style={styles.statBox}>
-        <Text style={styles.statNumber}>0</Text>
-        <Text style={styles.statLabel}>Friends</Text>
-      </View>
-      <View style={styles.statBox}>
-        <Text style={styles.statNumber}>0</Text>
-        <Text style={styles.statLabel}>Groups</Text>
-      </View>
-    </View>
-  </TouchableOpacity>
+          </TouchableOpacity>
 
-  {/* Wrap these elements to reduce spacing */}
-  <View style={{ alignItems: 'center', marginBottom: -90}}>
-    <Text style={styles.name}>{userData.firstName} {userData.lastName}</Text>
-    <Text style={styles.id}>{userData.userName}</Text>
+          <View style={{ alignItems: 'center', marginBottom: -10 }}>
+            <Text style={styles.name}>{userData.firstName} {userData.lastName}</Text>
+            <Text style={styles.id}>{userData.userName}</Text>
+          </View>
+
+          <View style={styles.statsContainer}>
+            <View style={styles.statBox}>
+              <Text style={styles.statNumber}>0</Text>
+              <Text style={styles.statLabel}>Friends</Text>
+            </View>
+            <View style={styles.statBox}>
+              <Text style={styles.statNumber}>0</Text>
+              <Text style={styles.statLabel}>Groups</Text>
+            </View>
+          </View>
+
+  <View style={{ marginTop: 10, width: '100%' }}>
+    <UserStats
+      currentUser={userData}
+      authUser={authUser}
+      getCurrentUserRank={getCurrentUserRank}
+      getRankSuffix={getRankSuffix}
+      getAccuracy={getAccuracy}
+      formatLastPlayed={formatLastPlayed}
+    />
   </View>
-
-  <UserStats
-    currentUser={userData}
-    authUser={authUser}
-    getCurrentUserRank={getCurrentUserRank}
-    getRankSuffix={getRankSuffix}
-    getAccuracy={getAccuracy}
-    formatLastPlayed={formatLastPlayed}
-  />
-
           <SignOut />
         </>
       )}
@@ -175,6 +176,7 @@ const styles = StyleSheet.create({
     height: 120,
     borderRadius: 60,
     marginBottom: 20,
+    justifyContent: 'center',
     backgroundColor: '#ecf0f1',
   },
   statsContainer: {
@@ -183,7 +185,7 @@ const styles = StyleSheet.create({
   },
   statBox: {
     alignItems: 'center',
-    flex: 1,
+    marginHorizontal: 15,
   },
   statNumber: {
     fontSize: 18,

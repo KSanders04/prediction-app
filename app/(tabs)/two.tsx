@@ -30,6 +30,7 @@ import { UserStats } from '../../components/userStats';
 // Types
 interface User {
   id: string;
+  userName?: string;
   name: string;
   email?: string;
   totalPoints: number;
@@ -116,7 +117,8 @@ export default function LeaderboardScreen() {
       const userData = userSnap.data();
       setCurrentUser({ 
         id: userSnap.id, 
-        name: userData.email || userData.name || userData.uid || `User_${userSnap.id.slice(0, 6)}`,
+        userName: userData.userName || `User_${userSnap.id.slice(0, 6)}`,
+        name: userData.userName || userData.email || userData.name || userData.uid || `User_${userSnap.id.slice(0, 6)}`,
         email: userData.email,
         totalPoints: userData.totalPoints || 0,
         gamesPlayed: userData.gamesPlayed || 0,
@@ -163,7 +165,8 @@ export default function LeaderboardScreen() {
         const userData = doc.data();
         users.push({ 
           id: doc.id, 
-          name: userData.email || userData.name || userData.uid || `User_${doc.id.slice(0, 6)}`,
+          userName: userData.userName || `User_${doc.id.slice(0, 6)}`,
+          name: userData.userName || userData.email || userData.name || userData.uid || `User_${doc.id.slice(0, 6)}`,
           email: userData.email,
           totalPoints: userData.totalPoints || 0,
           gamesPlayed: userData.gamesPlayed || 0,
@@ -299,7 +302,7 @@ export default function LeaderboardScreen() {
                   
                   <View style={styles.playerInfo}>
                     <Text style={[styles.playerName, isCurrentUser && styles.currentUserName]}>
-                      {isCurrentUser ? '👤 You' : user.name}
+                      {isCurrentUser ? '👤 You' : user.userName || user.name}
                     </Text>
                     <Text style={styles.playerStats}>
                       {user.gamesPlayed} games • {getAccuracy(user.correctPredictions, user.totalPredictions)}% accuracy
