@@ -2,24 +2,81 @@ import { View, Text, TouchableOpacity, StyleSheet, TextInput } from "react-nativ
 import { router } from "expo-router";
 import React from "react";
 
+import { collection, addDoc, query, where, getDocs } from 'firebase/firestore';
+import { db, auth } from '../../firebaseConfig';
+
+interface Group {
+  code: string;
+  createdAt: Date;
+  createdBy: string;
+  members: string[];
+}
+
 const SelectedMode = () => {
 
   const [groupcode, setGroupCode] = React.useState('');
+  const [code, setCode] = React.useState("");
+  const currentUser = auth.currentUser;
 
-  const joinGameButton = () => {
-    router.push("/home"); // just send to home for now
+const joinGroupButton = async () => {
+  try {
+    if (!code.trim()) {
+      alert('Please enter a group code');
+      return;
+    }
+
+    const groupsRef = collection(db, 'groups');
+    const q = query(groupsRef, where('code', '==', code));
+    const querySnapshot = await getDocs(q);
+
+    if (querySnapshot.empty) {
+      alert('Group not found. Please check the code and try again.');
+      return;
+    }
+
+    // Group exists, proceed to home
+    router.push("/home");
+  } catch (error) {
+    console.error("Error joining group:", error);
+    alert('Failed to join group. Please try again.');
   }
-  const createGameButton = () => { 
-    router.push("/home"); // shows them a custom code at the top of the screenbased on what game they pick, send them to games tab
+};
+  const createGroupButton = async () => { 
+  try {
     const min = 100000;
     const max = 999999;
-    const randomCode = Math.floor(Math.random() * (max - min + 1)) + min; // generates a random code between 1000000 and 9999999
-    setGroupCode(randomCode.toString()); // sets the group code state to the random code
-    alert(`Your group code is: ${randomCode}`); // alerts the user with the group code
-    console.log("Group code created:", randomCode); // logs the group code to the console
-  }
+    const randomCode = Math.floor(Math.random() * (max - min + 1)) + min;
+    
+    // Check if code already exists
+    const groupsRef = collection(db, 'groups');
+    const q = query(groupsRef, where('code', '==', randomCode.toString()));
+    const querySnapshot = await getDocs(q);
+    
+    if (!querySnapshot.empty) {
+      alert('Code already exists, please try again');
+      return;
+    }
 
-    const [code, setCode] = React.useState("");
+    // Create new group document
+    const groupData: Group = {
+      code: randomCode.toString(),
+      createdAt: new Date(),
+      createdBy: currentUser?.email || '',  // Assuming you have currentUser from auth
+      members: []
+    };
+
+    await addDoc(collection(db, 'groups'), groupData);
+    
+    setGroupCode(randomCode.toString());
+    alert(`Your group code is: ${randomCode}`);
+    console.log("Group created with code:", randomCode);
+    
+    router.push("/home");
+  } catch (error) {
+    console.error("Error creating group:", error);
+    alert('Failed to create group. Please try again.');
+  }
+};
 
   return (
     <View style={styles.container}>
@@ -30,10 +87,10 @@ const SelectedMode = () => {
               value={code}
               onChangeText={setCode}
             />
-      <TouchableOpacity style={styles.button} onPress={joinGameButton}>
+      <TouchableOpacity style={styles.button} onPress={joinGroupButton}>
         <Text style={styles.buttonText}>Join Group</Text>
       </TouchableOpacity>
-      <TouchableOpacity style={styles.button} onPress={createGameButton}>
+      <TouchableOpacity style={styles.button} onPress={createGroupButton}>
         <Text style={styles.buttonText}>Create Group</Text>
       </TouchableOpacity>
 

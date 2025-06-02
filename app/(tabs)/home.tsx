@@ -356,15 +356,14 @@ export default function Home() {
 
   // Listen for active questions in real-time
   const listenForActiveQuestions = useCallback((gameId: string) => {
-<<<<<<< HEAD
     console.log('Setting up real-time question listener for game:', gameId);
 
-=======
+
     console.log('🔍 Setting up real-time question listener for game:', gameId);
     console.log('🔍 Current user is gamemaster:', isGameMasterAccount);
     console.log('🔍 Player ID:', playerId);
     
->>>>>>> c1e38cf2ddbcb8b886132570cf04b95a407463bf
+
     const questionsQuery = query(
       collection(db, "questions"),
       where("gameId", "==", gameId),
@@ -374,10 +373,9 @@ export default function Home() {
     );
 
     const unsubscribeQuestions = onSnapshot(questionsQuery, (snapshot) => {
-<<<<<<< HEAD
-=======
+
       console.log('📥 Question snapshot received, docs count:', snapshot.docs.length);
->>>>>>> c1e38cf2ddbcb8b886132570cf04b95a407463bf
+
       
       if (!snapshot.empty) {
         const questionDoc = snapshot.docs[0];
@@ -736,17 +734,17 @@ export default function Home() {
         return;
       }
 
-<<<<<<< HEAD
+
       console.log('Found game:', selectedGame);
 // First, remove user from previous game if exists
     if (currentGameId) {
       console.log('Removing user from previous game:', currentGameId);
       const previousGameRef = doc(db, "games", currentGameId);
       const previousGameDoc = await getDoc(previousGameRef);
-=======
+
       console.log('✅ Found game:', selectedGame);
       console.log('✅ Game ID:', selectedGame.id);
->>>>>>> c1e38cf2ddbcb8b886132570cf04b95a407463bf
+
       
       if (previousGameDoc.exists()) {
         const previousGameData = previousGameDoc.data();
