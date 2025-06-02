@@ -259,7 +259,10 @@ export default function LeaderboardScreen() {
         {/* Your Stats Section */}
         {currentUser && (
           <UserStats
-            currentUser={currentUser}
+            currentUser={{
+              ...currentUser,
+              userName: currentUser.userName ?? `User_${currentUser.id.slice(0, 6)}`
+            }}
             authUser={authUser}
             getCurrentUserRank={getCurrentUserRank}
             getRankSuffix={getRankSuffix}

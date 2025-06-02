@@ -28,8 +28,17 @@ export const UserStats: React.FC<{
   formatLastPlayed,
 }) => (
   <View style={styles.currentUserSection}>
-    <Text style={styles.sectionTitle}>📊 Your Stats</Text>
-    <Text style={styles.userEmail}>{currentUser.userName}</Text>
+   <Text style={styles.sectionTitle}>📊 Your Stats</Text>
+
+<View style={styles.nameContainer}>
+  <Text style={styles.nameText}>
+    {currentUser.userName || authUser?.email || `User_${authUser?.uid?.slice(0, 6)}`}
+  </Text>
+  {currentUser.userName && (
+  <Text style={styles.usernameText}>@{currentUser.userName}</Text>
+)}
+
+</View>
     <View style={styles.statsGrid}>
       <View style={styles.statCard}>
         <Text style={styles.statValue}>{getCurrentUserRank() || '--'}</Text>
@@ -127,4 +136,19 @@ const styles = StyleSheet.create({
     color: '#34495e',
     marginBottom: 5,
   },
+  nameContainer: {
+  alignItems: 'center',
+  marginBottom: 15,
+},
+nameText: {
+  fontSize: 18,
+  fontWeight: '600',
+  color: '#2c3e50',
+},
+usernameText: {
+  fontSize: 14,
+  color: '#7f8c8d',
+  fontStyle: 'italic',
+  marginTop: 2,
+},
 });
