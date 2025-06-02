@@ -618,11 +618,37 @@ export default function Home() {
     }
   }, [gameName, gameURL, playerId]);
 
-  // FIXED: Create question with proper game validation
+  // FIXED: Create question with proper game validation and admin ownership
   const adminCreateQuestionFromTemplate = useCallback(async (templateType: string) => {
-    // Use admin's current game ID
+    // Validate admin has an active game
     if (!adminCurrentGameId) {
       Alert.alert('Error', 'Create a game first!');
+      return;
+    }
+
+    // Double-check this admin owns the game
+    try {
+      const gameRef = doc(db, "games", adminCurrentGameId);
+      const gameSnap = await getDoc(gameRef);
+      
+      if (!gameSnap.exists()) {
+        Alert.alert('Error', 'Game not found!');
+        return;
+      }
+      
+      const gameData = gameSnap.data();
+      if (gameData.createdBy !== playerId) {
+        Alert.alert('Error', 'You can only create questions for your own game!');
+        return;
+      }
+      
+      if (gameData.status !== 'active') {
+        Alert.alert('Error', 'Game is not active!');
+        return;
+      }
+    } catch (error) {
+      console.error('Error validating game ownership:', error);
+      Alert.alert('Error', 'Failed to validate game ownership');
       return;
     }
 
@@ -633,64 +659,91 @@ export default function Home() {
     }
 
     try {
-      console.log('🎯 Creating question from template:', template.type, 'for game:', adminCurrentGameId);
+      console.log('🎯 Creating question from template:', template.type, 'for admin game:', adminCurrentGameId);
+      console.log('🎯 Admin player ID:', playerId);
       
-      // Close existing active questions in this admin's game
+      // CRITICAL: Close existing active questions ONLY in THIS admin's game
       const activeQuestionsQuery = query(
         collection(db, "questions"),
-        where("gameId", "==", adminCurrentGameId),
-        where("createdBy", "==", playerId),
+        where("gameId", "==", adminCurrentGameId),  // ← ONLY this admin's game
+        where("createdBy", "==", playerId),         // ← ONLY this admin's questions
         where("status", "==", "active")
       );
       
       const activeQuestionsSnapshot = await getDocs(activeQuestionsQuery);
-      const closePromises = activeQuestionsSnapshot.docs.map(doc => 
-        updateDoc(doc.ref, { status: "finished" })
-      );
+      console.log(`🔄 Found ${activeQuestionsSnapshot.docs.length} active questions in admin's game to close`);
+      
+      const closePromises = activeQuestionsSnapshot.docs.map(doc => {
+        console.log(`🛑 Closing question: ${doc.data().question} in game: ${doc.data().gameId}`);
+        return updateDoc(doc.ref, { status: "finished" });
+      });
       
       if (closePromises.length > 0) {
         await Promise.all(closePromises);
-        console.log('Closed', closePromises.length, 'existing active questions');
+        console.log(`✅ Closed ${closePromises.length} existing active questions in admin's game`);
       }
 
-      // Create new question
+      // Create new question ONLY for this admin's game
       const docRef = await addDoc(collection(db, "questions"), {
-        gameId: adminCurrentGameId,
+        gameId: adminCurrentGameId,           // ← SPECIFIC to this admin's game
         templateId: template.id,
         question: template.text,
         options: template.options.map(opt => opt.optionText),
         status: "active",
         actual_result: null,
         createdAt: new Date(),
-        createdBy: playerId
+        createdBy: playerId                  // ← SPECIFIC to this admin
       });
 
-      console.log('✅ Question created successfully with ID:', docRef.id);
-      Alert.alert('Success', `Question created: ${template.type}! All players can see it.`);
+      console.log(`✅ Question created successfully with ID: ${docRef.id} for game: ${adminCurrentGameId}`);
+      Alert.alert('Success', `Question created: ${template.type}! Only players in your game can see it.`);
+      
     } catch (error: any) {
       console.error("❌ Error creating question from template:", error);
       Alert.alert('Error', 'Failed to create question: ' + (error?.message || 'Unknown error'));
     }
   }, [adminCurrentGameId, playerId, questionTemplates]);
 
+  // FIXED: Close question only in admin's game
   const adminCloseQuestion = useCallback(async () => {
     if (!currentQuestionId) {
       Alert.alert('Error', 'No active question!');
       return;
     }
 
+    if (!adminCurrentGameId) {
+      Alert.alert('Error', 'No active game!');
+      return;
+    }
+
     try {
-      await updateDoc(doc(db, "questions", currentQuestionId), {
+      // Verify this question belongs to the admin's game
+      const questionRef = doc(db, "questions", currentQuestionId);
+      const questionSnap = await getDoc(questionRef);
+      
+      if (!questionSnap.exists()) {
+        Alert.alert('Error', 'Question not found!');
+        return;
+      }
+      
+      const questionData = questionSnap.data();
+      if (questionData.gameId !== adminCurrentGameId || questionData.createdBy !== playerId) {
+        Alert.alert('Error', 'You can only close questions in your own game!');
+        return;
+      }
+
+      await updateDoc(questionRef, {
         status: "closed"
       });
       
-      Alert.alert('Success', 'Question closed for all players!');
+      console.log(`✅ Question closed in game: ${adminCurrentGameId}`);
+      Alert.alert('Success', 'Question closed for players in your game!');
       
     } catch (error) {
       console.error("Error:", error);
       Alert.alert('Error', 'Failed to close question');
     }
-  }, [currentQuestionId]);
+  }, [currentQuestionId, adminCurrentGameId, playerId]);
 
   // Games functionality 
   const fetchActiveGames = useCallback(async () => {
@@ -849,25 +902,47 @@ export default function Home() {
     }
   }, [adminCurrentGameId, playerId]);
 
+  // FIXED: Set answer only for admin's game question
   const adminSetAnswer = useCallback(async (answer: string) => {
     if (!currentQuestionId) {
       Alert.alert('Error', 'No question active!');
       return;
     }
 
+    if (!adminCurrentGameId) {
+      Alert.alert('Error', 'No active game!');
+      return;
+    }
+
     try {
-      await updateDoc(doc(db, "questions", currentQuestionId), {
+      // Verify this question belongs to the admin's game
+      const questionRef = doc(db, "questions", currentQuestionId);
+      const questionSnap = await getDoc(questionRef);
+      
+      if (!questionSnap.exists()) {
+        Alert.alert('Error', 'Question not found!');
+        return;
+      }
+      
+      const questionData = questionSnap.data();
+      if (questionData.gameId !== adminCurrentGameId || questionData.createdBy !== playerId) {
+        Alert.alert('Error', 'You can only set answers for questions in your own game!');
+        return;
+      }
+
+      await updateDoc(questionRef, {
         actual_result: answer,
         status: "finished"
       });
       
-      Alert.alert('Success', `Answer set to: ${answer}. All players can now see the results!`);
+      console.log(`✅ Answer set for question in game: ${adminCurrentGameId}`);
+      Alert.alert('Success', `Answer set to: ${answer}. Players in your game can now see the results!`);
       
     } catch (error) {
       console.error("Error:", error);
       Alert.alert('Error', 'Failed to set answer');
     }
-  }, [currentQuestionId]);
+  }, [currentQuestionId, adminCurrentGameId, playerId]);
 
   const adminCalculateWinners = useCallback(async () => {
     if (!currentQuestionId || correctAnswer === 'Not set') {
@@ -1141,7 +1216,7 @@ export default function Home() {
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Step 2: Create Question</Text>
               <Text style={styles.infoText}>
-                📝 Creating a new question will close any active question
+                📝 Creating a new question will close any active question in YOUR game only
               </Text>
               
               {questionTemplates.length === 0 ? (
@@ -1387,17 +1462,19 @@ export default function Home() {
                 )}
               </View>
 
-              {/* Debug Info */}
+              {/* Enhanced Debug Info */}
               <View style={styles.debugSection}>
                 <Text style={styles.debugTitle}>🔧 Debug Info</Text>
                 <Text style={styles.debugText}>Is GameMaster: {isGameMasterAccount ? 'Yes' : 'No'}</Text>
                 <Text style={styles.debugText}>Selected Game: {playerSelectedGame}</Text>
                 <Text style={styles.debugText}>Current Game ID: {currentGameId}</Text>
+                <Text style={styles.debugText}>Admin Game ID: {adminCurrentGameId}</Text>
                 <Text style={styles.debugText}>Question ID: {currentQuestionId}</Text>
                 <Text style={styles.debugText}>Player ID: {playerId}</Text>
                 <Text style={styles.debugText}>Current Question: {currentQuestion}</Text>
                 <Text style={styles.debugText}>Prediction Status: {predictionStatus}</Text>
                 <Text style={styles.debugText}>Question Options: {questionOptions.join(', ')}</Text>
+                <Text style={styles.debugText}>All Active Games: {allGames.map(g => `${g.name}(${g.id.slice(0,6)})`).join(', ')}</Text>
               </View>
             </>
           )}
