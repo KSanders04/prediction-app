@@ -758,7 +758,7 @@ export default function Home() {
         }
         
         // Update user stats for each player
-        const updatePromise = updateUserStats(guess.playerId, isCorrect || '');
+        const updatePromise = updateUserStats(guess.playerId, isCorrect);
         updatePromises.push(updatePromise);
       });
 
