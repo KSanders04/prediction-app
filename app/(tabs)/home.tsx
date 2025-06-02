@@ -87,6 +87,7 @@ export default function Home() {
   const [questionTemplates, setQuestionTemplates] = useState<QuestionTemplate[]>([]);
   const [playerSelectedGame, setPlayerSelectedGame] = useState<string | null>(null);
   const [playerSelectedGameURL, setPlayerSelectedGameURL] = useState<string | null>(null);
+  const [adminGameOpen, setAdminGameOpen] = useState<boolean>(false);
 
 
   // This creates the questionTemplates collection in Firebase if it doesn't exist
@@ -233,18 +234,18 @@ export default function Home() {
         // Now listen for active questions in this game
         listenForActiveQuestions(gameDoc.id);
       } else {
-        console.log('No active games found - resetting everything');
+        //console.log('No active games found - resetting everything');
         // Reset everything if no active games
-        setCurrentGameId(null);
-        setCurrentGame('No game active');
-        setCurrentGameURL('');
-        setCurrentQuestionId(null);
-        setCurrentQuestion('Waiting for question...');
-        setPredictionStatus('Waiting...');
-        setQuestionOptions([]);
-        setCorrectAnswer('Not set');
-        setUserPrediction('');
-        setAllGuesses([]);
+        //setCurrentGameId(null);
+        //setCurrentGame('No game active');
+        //setCurrentGameURL('');
+        //setCurrentQuestionId(null);
+        //setCurrentQuestion('Waiting for question...');
+        //setPredictionStatus('Waiting...');
+        //setQuestionOptions([]);
+        //setCorrectAnswer('Not set');
+        //setUserPrediction('');
+        //setAllGuesses([]);
       }
     });
 
@@ -416,7 +417,7 @@ export default function Home() {
     }
   }, []);
 
-  const updateUserStats = useCallback(async (userId: string, isCorrect: boolean, gameId: string) => {
+  const updateUserStats = useCallback(async (userId: string, isCorrect: boolean) => {
     try {
       console.log(`Updating stats for user ${userId}: correct=${isCorrect}`);
       
@@ -467,6 +468,10 @@ export default function Home() {
       Alert.alert('Error', 'Please enter a game name!');
       return;
     }
+    if (!gameURL.trim()) {
+      Alert.alert('Error', 'Please enter a valid game URL!');
+      return;
+    }
 
     try {
       console.log('Creating new game and closing any existing active games');
@@ -480,14 +485,16 @@ export default function Home() {
       
       const activeGamesSnapshot = await getDocs(activeGamesQuery);
       
-      // Close all active games
-      const closePromises = activeGamesSnapshot.docs.map(doc => 
-        updateDoc(doc.ref, { status: "closed", endedAt: new Date() })
-      );
-      
-      if (closePromises.length > 0) {
-        await Promise.all(closePromises);
-        console.log('Closed', closePromises.length, 'existing active games');
+      const checkAdminQuery = query(
+        collection(db, 'games'),
+        where('createdBy', '==', playerId),
+        where('status', '==', 'active'),
+      )
+
+      const checkAdminSnapshot = await getDocs(checkAdminQuery);
+      if (!checkAdminSnapshot.empty) {
+        Alert.alert('Error', 'You already have an active game!');
+        return;
       }
 
       // Now create the new game
@@ -498,11 +505,12 @@ export default function Home() {
         createdAt: new Date(),
         url: gameURL,
         videoId: videoID,
-        createdBy: playerId // Track who created the game
+        createdBy: playerId, // Track who created the game
       });
       
       setGameName('');
       setGameURL('');
+      setAdminGameOpen(true);
       Alert.alert('Success', `Game created: ${gameName}. All players can now see this game!`);
       
     } catch (error) {
@@ -611,13 +619,19 @@ export default function Home() {
       const gamesRef = collection(db, 'games');
       const q = query(gamesRef, where('name', '==', gameName));
       const querySnapshot = await getDocs(q);
+      const gameDoc = querySnapshot.docs[0];
+      if (!gameDoc) { 
+        console.log(`Game not found: ${gameName}`);
+        Alert.alert('Error', `Game not found: ${gameName}`);
+        return;
+      }
 
       if (!querySnapshot.empty) {
         // Get the first matching document's data
         const docData = querySnapshot.docs[0].data();
         if (docData.url) {
           setCurrentGameURL(docData.url);
-          setCurrentGameId(docData.videoId);
+          setCurrentGameId(gameDoc.id);
           setCurrentGame(gameName);
           setPlayerSelectedGame(gameName);
           setPlayerSelectedGameURL(docData.url);
@@ -651,9 +665,19 @@ export default function Home() {
     
     if (!currentGameId) {
       Alert.alert('Error', 'No active game!');
+      console.log(currentGameId)
       return;
     }
-
+    const checkAdminQuery = query(
+      collection(db, 'games'), 
+      where('createdBy', '==', playerId),
+      where('status', '==', 'active'),
+    );
+    const checkAdminSnapshot = await getDocs(checkAdminQuery);
+    if (checkAdminSnapshot.empty) {
+      Alert.alert('Error', 'You are not the game master for this game!');
+      return;
+    }
     try {
       console.log('Attempting to close game:', currentGameId);
       
@@ -667,6 +691,7 @@ export default function Home() {
         return;
       }
       
+      
       console.log('Game exists, updating status...');
       await updateDoc(gameRef, {
         status: "closed",
@@ -677,6 +702,8 @@ export default function Home() {
       console.log('Game status updated successfully');
       
       Alert.alert('Success', 'Game ended for all players! Everything has been reset.');
+      setAdminGameOpen(false);
+      
       
     } catch (error: any) {
       console.error("Error ending game:", error);
@@ -731,7 +758,7 @@ export default function Home() {
         }
         
         // Update user stats for each player
-        const updatePromise = updateUserStats(guess.playerId, isCorrect, currentGameId || '');
+        const updatePromise = updateUserStats(guess.playerId, isCorrect || '');
         updatePromises.push(updatePromise);
       });
 
@@ -904,7 +931,7 @@ export default function Home() {
           <Text style={styles.title}>🔧 GAMEMASTER PANEL</Text>
           <Text style={styles.welcomeText}>Welcome, {currentUser?.email}!</Text>
           
-          {!currentGameURL || getURLID(currentGameURL) === "" ? (
+          {adminGameOpen === false  ? (
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Step 1: Create Game</Text>
 
