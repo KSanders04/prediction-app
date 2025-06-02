@@ -214,6 +214,7 @@ export default function Home() {
       const gamesQuery = query(
       collection(db, "games"),
       where("status", "==", "active"),
+      where("createBy", "==", playerId)
     );
 
     const unsubscribeGames = onSnapshot(gamesQuery, (snapshot) => {
@@ -473,7 +474,8 @@ export default function Home() {
       // ADDED: First, close any existing active games to prevent conflicts
       const activeGamesQuery = query(
         collection(db, "games"),
-        where("status", "==", "active")
+        where("status", "==", "active"),
+        where("createdBy", "==", playerId)
       );
       
       const activeGamesSnapshot = await getDocs(activeGamesQuery);
