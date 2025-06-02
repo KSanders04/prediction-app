@@ -215,7 +215,7 @@ export default function Home() {
       const gamesQuery = query(
       collection(db, "games"),
       where("status", "==", "active"),
-      where("createBy", "==", playerId)
+      where("createdBy", "==", playerId)
     );
 
     const unsubscribeGames = onSnapshot(gamesQuery, (snapshot) => {
@@ -234,18 +234,17 @@ export default function Home() {
         // Now listen for active questions in this game
         listenForActiveQuestions(gameDoc.id);
       } else {
-        //console.log('No active games found - resetting everything');
-        // Reset everything if no active games
-        //setCurrentGameId(null);
-        //setCurrentGame('No game active');
-        //setCurrentGameURL('');
-        //setCurrentQuestionId(null);
-        //setCurrentQuestion('Waiting for question...');
-        //setPredictionStatus('Waiting...');
-        //setQuestionOptions([]);
-        //setCorrectAnswer('Not set');
-        //setUserPrediction('');
-        //setAllGuesses([]);
+        console.log('No active games found - resetting everything');
+        setCurrentGameId(null);
+        setCurrentGame('No game active');
+        setCurrentGameURL('');
+        setCurrentQuestionId(null);
+        setCurrentQuestion('Waiting for question...');
+        setPredictionStatus('Waiting...');
+        setQuestionOptions([]);
+        setCorrectAnswer('Not set');
+        setUserPrediction('');
+        setAllGuesses([]);
       }
     });
 
@@ -417,7 +416,7 @@ export default function Home() {
     }
   }, []);
 
-  const updateUserStats = useCallback(async (userId: string, isCorrect: boolean) => {
+  const updateUserStats = useCallback(async (userId: string, isCorrect: boolean, currentGameId: string) => {
     try {
       console.log(`Updating stats for user ${userId}: correct=${isCorrect}`);
       
@@ -541,6 +540,7 @@ export default function Home() {
       const activeQuestionsQuery = query(
         collection(db, "questions"),
         where("gameId", "==", currentGameId),
+        where("createdBy", "==", playerId),
         where("status", "==", "active")
       );
       
@@ -565,9 +565,9 @@ export default function Home() {
         createdAt: new Date(),
         createdBy: playerId
       });
+
       
       Alert.alert('Success', `Question created from template: ${template.type}! All players can see it.`);
-      
     } catch (error) {
       console.error("❌ Error creating question from template:", error);
       Alert.alert('Error', 'Failed to create question');
@@ -758,7 +758,7 @@ export default function Home() {
         }
         
         // Update user stats for each player
-        const updatePromise = updateUserStats(guess.playerId, isCorrect);
+        const updatePromise = updateUserStats(guess.playerId, isCorrect, currentGameId || '');
         updatePromises.push(updatePromise);
       });
 
@@ -964,17 +964,16 @@ export default function Home() {
           {currentGameURL !== "" && (
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Game Play</Text>
+              {adminGameOpen === true ? 
+              <>
               <YoutubePlayer
                 height={200}
                 play={isVideoPlaying}
                 videoId={getURLID(currentGameURL)}
                 onChangeState={onVideoStateChange}
-              />
-            
-              <TouchableOpacity style={styles.primaryButton} onPress={togglePlaying}>
+              /> <TouchableOpacity style={styles.primaryButton} onPress={togglePlaying}>
                 <Text style={styles.buttonText}>▶️ {isVideoPlaying ? "Pause" : "Play"}</Text>
               </TouchableOpacity>
-
               <TouchableOpacity
                 style={styles.dangerButton}
                 onPress={() => {
@@ -985,6 +984,11 @@ export default function Home() {
               >
                 <Text style={styles.buttonText}>♻️ Remove Video</Text>
               </TouchableOpacity>
+              </>
+              : null}
+
+
+ 
             </View>
           )}
 
