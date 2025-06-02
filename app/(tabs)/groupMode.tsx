@@ -4,7 +4,7 @@ import React from "react";
 
 import { collection, addDoc, query, where, getDocs } from 'firebase/firestore';
 import { db, auth } from '../../firebaseConfig';
-
+import { updateDoc, doc } from 'firebase/firestore';
 interface Group {
   code: string;
   createdAt: Date;
@@ -25,6 +25,11 @@ const joinGroupButton = async () => {
       return;
     }
 
+    if (!currentUser?.email) {
+      alert('You must be logged in to join a group');
+      return;
+    }
+
     const groupsRef = collection(db, 'groups');
     const q = query(groupsRef, where('code', '==', code));
     const querySnapshot = await getDocs(q);
@@ -34,7 +39,26 @@ const joinGroupButton = async () => {
       return;
     }
 
-    // Group exists, proceed to home
+    const groupDoc = querySnapshot.docs[0];
+    const groupData = groupDoc.data();
+
+    // Check if user is already in the group
+    if (groupData.members?.includes(currentUser.email)) {
+      alert('You are already a member of this group');
+      router.push("/home");
+      return;
+    }
+
+    // Add user to members array
+    const updatedMembers = [...(groupData.members || []), currentUser.email];
+    
+    // Update the document with new members list
+    await updateDoc(doc(db, 'groups', groupDoc.id), {
+      members: updatedMembers
+    });
+
+    console.log(`✅ User ${currentUser.email} added to group ${code}`);
+    alert('Successfully joined the group!');
     router.push("/home");
   } catch (error) {
     console.error("Error joining group:", error);
