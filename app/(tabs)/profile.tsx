@@ -6,9 +6,13 @@ import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import * as ImagePicker from 'expo-image-picker';
 import SignOut from './signout';
 import { UserStats } from '../../components/userStats';
+import { reauthenticateWithCredential, EmailAuthProvider, updatePassword } from "firebase/auth";
+import { useNavigation } from '@react-navigation/native';
 
 
 export default function Profile() {
+  const navigation = useNavigation<Navigation>();
+
   const [userData, setUserData] = useState({
     name: '', firstName: '', lastName: '', userName: '', profilePic: '',
     totalPoints: 0, correctPredictions: 0, totalPredictions: 0, gamesPlayed: 0, lastPlayed: null,
@@ -18,6 +22,10 @@ export default function Profile() {
   const [authUser, setAuthUser] = useState<any>(null);
   const [editingUsername, setEditingUsername] = useState(false);
   const [newUsername, setNewUsername] = useState('');
+  const [changingPassword, setChangingPassword] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
 
   useEffect(() => {
     const fetchUserData = async () => {
@@ -134,6 +142,45 @@ export default function Profile() {
     }
   };
 
+  const handleChangePassword = async () => {
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      Alert.alert('Error', 'Please fill in all fields.');
+      return;
+    }
+    if (newPassword.length < 6) {
+      Alert.alert('Error', 'Password must be at least 6 characters long.');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      Alert.alert('Error', 'New passwords do not match.');
+      return;
+    }
+    try {
+      const user = auth.currentUser;
+      if (!user || !user.email) {
+        Alert.alert('Error', 'No authenticated user.');
+        return;
+      }
+      // Re-authenticate
+      const credential = EmailAuthProvider.credential(user.email, currentPassword);
+      await reauthenticateWithCredential(user, credential);
+
+      // Update password
+      await updatePassword(user, newPassword);
+
+      Alert.alert('Success', 'Password updated!');
+      setChangingPassword(false);
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+    } catch (error: any) {
+      let msg = 'Could not change password.';
+      if (error.code === 'auth/wrong-password') msg = 'Current password is incorrect.';
+      if (error.code === 'auth/weak-password') msg = 'Password must be at least 6 characters.';
+      Alert.alert('Error', msg);
+    }
+  };
+
   return (
     <ScrollView 
       style={styles.container}
@@ -158,7 +205,7 @@ export default function Profile() {
             <Text style={styles.name}>{userData.firstName} {userData.lastName}</Text>
           </View>
 
-          <View style={[styles.statsContainer, { marginTop: 35, marginBottom: -10 }]}> 
+          <View style={[styles.statsContainer, { marginTop: 35, marginBottom: -10 }]}>
             <View style={styles.statBox}>
               <Text style={styles.statNumber}>0</Text>
               <Text style={styles.statLabel}>Friends</Text>
@@ -169,7 +216,6 @@ export default function Profile() {
               </Text>
               <Text style={styles.statLabel}>Groups</Text>
             </View>
-            {}
             <TouchableOpacity
               style={styles.editUsernameButton}
               onPress={() => {
@@ -179,8 +225,62 @@ export default function Profile() {
             >
               <Text style={styles.editUsernameButtonText}>Edit Username</Text>
             </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.editUsernameButton}
+              onPress={() => navigation.navigate('changePasswordPage')}
+            >
+              <Text style={styles.editUsernameButtonText}>Change Password</Text>
+            </TouchableOpacity>
           </View>
+          {/* Change Password Button */}
+          
 
+          {/* Change Password Modal/Section */}
+          {changingPassword && (
+            <View style={{ flexDirection: 'column', alignItems: 'center', marginTop: 20 }}>
+              <TextInput
+                style={styles.usernameInput}
+                value={currentPassword}
+                onChangeText={setCurrentPassword}
+                placeholder="Current Password"
+                secureTextEntry
+                autoFocus
+              />
+              <TextInput
+                style={[styles.usernameInput, { marginTop: 10 }]}
+                value={newPassword}
+                onChangeText={setNewPassword}
+                placeholder="New Password"
+                secureTextEntry
+              />
+              <TextInput
+                style={[styles.usernameInput, { marginTop: 10 }]}
+                value={confirmPassword}
+                onChangeText={setConfirmPassword}
+                placeholder="Confirm New Password"
+                secureTextEntry
+              />
+              <View style={{ flexDirection: 'row', marginTop: 10 }}>
+                <TouchableOpacity
+                  style={styles.saveButton}
+                  onPress={handleChangePassword}
+                >
+                  <Text style={styles.saveButtonText}>Save</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.cancelButton}
+                  onPress={() => {
+                    setChangingPassword(false);
+                    setCurrentPassword('');
+                    setNewPassword('');
+                    setConfirmPassword('');
+                  }}
+                >
+                  <Text style={styles.cancelButtonText}>Cancel</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
           {}
           {editingUsername && (
             <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 20, marginBottom: -20 }}>
@@ -216,7 +316,13 @@ export default function Profile() {
     </ScrollView>
   );
 }
+type Navigation = {
+  navigate: (screen: string) => void;
+};
 
+Profile.navigationOptions = {
+  headerShown: false,
+};
 
 const styles = StyleSheet.create({
   container: {
