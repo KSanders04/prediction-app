@@ -47,8 +47,18 @@ interface Game {
   url?: string;
   videoId?: string;
   createdAt: Date;
-  liveViewers?: string[];
-  totalViewers?: string[];
+}
+
+interface GroupData {
+  id: string;
+  code: string;
+  groupStatus: string;
+  createdBy: string;
+  members: string[];
+  groupName: string;
+  currentGameId?: string;
+  currentGameName?: string;
+  groupAdminID: string;
 }
 
 export default function GroupHome() {
@@ -73,6 +83,11 @@ export default function GroupHome() {
   const [currentGameURL, setCurrentGameURL] = useState('');
   const [isVideoPlaying, setIsVideoPlaying] = useState(true);
   const [playerSelectedGame, setPlayerSelectedGame] = useState<string | null>(null);
+  const [groupData, setGroupData] = useState<GroupData | null>(null);
+  const [groupDocId, setGroupDocId] = useState<string | null>(null);
+
+  // Cleanup functions for listeners
+  const [unsubscribeFunctions, setUnsubscribeFunctions] = useState<Array<() => void>>([]);
 
   // Authentication and group setup
   useEffect(() => {
@@ -82,6 +97,7 @@ export default function GroupHome() {
         setPlayerId(user.uid);
         await setupGroupData(user);
       } else {
+        cleanupAllListeners();
         setCurrentUser(null);
         setPlayerId('');
         setIsGroupAdmin(false);
@@ -90,8 +106,29 @@ export default function GroupHome() {
     return () => unsubscribe();
   }, []);
 
+  // Cleanup function for all listeners
+  const cleanupAllListeners = useCallback(() => {
+    unsubscribeFunctions.forEach(unsubscribe => {
+      if (typeof unsubscribe === 'function') {
+        try {
+          unsubscribe();
+        } catch (error) {
+          console.error('Error cleaning up listener:', error);
+        }
+      }
+    });
+    setUnsubscribeFunctions([]);
+  }, [unsubscribeFunctions]);
+
+  // Add a listener to the cleanup list
+  const addUnsubscribeFunction = useCallback((unsubscribe: () => void) => {
+    setUnsubscribeFunctions(prev => [...prev, unsubscribe]);
+  }, []);
+
   const setupGroupData = async (user: any) => {
     try {
+      cleanupAllListeners();
+      
       const groupsRef = collection(db, 'groups');
 
       // Check if user is admin
@@ -104,21 +141,31 @@ export default function GroupHome() {
 
       if (!adminSnapshot.empty) {
         const groupDoc = adminSnapshot.docs[0];
-        const groupData = groupDoc.data();
+        const groupDocData = groupDoc.data();
         
-        setGroupCode(groupData.code || '');
-        setGroupMembers(groupData.members || []);
+        console.log('🔧 User is group admin');
+        
+        setGroupDocId(groupDoc.id);
+        setGroupCode(groupDocData.code || '');
+        setGroupMembers(groupDocData.members || []);
         setIsGroupAdmin(true);
         
-        // Update admin fields if missing
-        if (!groupData.groupAdminID || groupData.groupAdminID === '') {
-          await updateDoc(groupDoc.ref, {
-            groupAdminID: user.uid,
-            isAdmin: true,
-            adminEmail: user.email,
-            adminId: user.uid,
-          });
+        const groupInfo: GroupData = {
+          id: groupDoc.id,
+          ...groupDocData
+        } as GroupData;
+        setGroupData(groupInfo);
+        
+        // Set up group listener
+        const groupUnsubscribe = setupGroupListener(groupDoc.id);
+        addUnsubscribeFunction(groupUnsubscribe);
+        
+        // Auto-select game if exists
+        if (groupDocData.currentGameId && groupDocData.currentGameName) {
+          console.log('🎮 Auto-selecting admin game:', groupDocData.currentGameName);
+          await selectGameForGroup(groupDocData.currentGameId, groupDocData.currentGameName, groupDocData.url);
         }
+        
       } else {
         // Check if user is a member
         const memberQuery = query(
@@ -130,12 +177,33 @@ export default function GroupHome() {
 
         if (!memberSnapshot.empty) {
           const groupDoc = memberSnapshot.docs[0];
-          const groupData = groupDoc.data();
+          const groupDocData = groupDoc.data();
           
-          setGroupCode(groupData.code || '');
-          setGroupMembers(groupData.members || []);
+          console.log('🔧 User is group member');
+          
+          setGroupDocId(groupDoc.id);
+          setGroupCode(groupDocData.code || '');
+          setGroupMembers(groupDocData.members || []);
           setIsGroupAdmin(false);
+          
+          const groupInfo: GroupData = {
+            id: groupDoc.id,
+            ...groupDocData
+          } as GroupData;
+          setGroupData(groupInfo);
+          
+          // Set up group listener
+          const groupUnsubscribe = setupGroupListener(groupDoc.id);
+          addUnsubscribeFunction(groupUnsubscribe);
+          
+          // Auto-select game if exists
+          if (groupDocData.currentGameId && groupDocData.currentGameName) {
+            console.log('🎮 Auto-selecting member game:', groupDocData.currentGameName);
+            await selectGameForGroup(groupDocData.currentGameId, groupDocData.currentGameName, groupDocData.url);
+          }
+          
         } else {
+          console.log('❌ User is not in any active group');
           setIsGroupAdmin(false);
         }
       }
@@ -145,85 +213,166 @@ export default function GroupHome() {
     }
   };
 
-  // Fetch active games
-  const fetchActiveGames = useCallback(async () => {
-    try {
-      const gamesRef = collection(db, 'games');
-      const q = query(gamesRef, where('status', '==', 'active'));
-      const querySnapshot = await getDocs(q);
-
-      const games: Game[] = [];
-      querySnapshot.forEach((doc) => {
-        const data = doc.data();
-        games.push({
-          id: doc.id,
-          ...data,
-          createdAt: data.createdAt?.toDate() || new Date()
-        } as Game);
-      });
-
-      setAllGames(games);
-    } catch (error) {
-      console.error('Error fetching active games:', error);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchActiveGames();
-  }, [fetchActiveGames]);
-
-  // Listen for active questions in real-time
-  const listenForActiveQuestions = useCallback((gameId: string) => {
-    if (!gameId) return;
-
-    console.log('🔍 Setting up question listener for game:', gameId);
+  // Set up real-time listener for group changes
+  const setupGroupListener = (groupDocId: string) => {
+    console.log('📡 Setting up group listener');
     
-    const questionsQuery = query(
-      collection(db, "questions"),
-      where("gameId", "==", gameId),
-      where("status", "in", ["active", "closed", "finished"]),
-      orderBy("createdAt", "desc"),
-      limit(1)
-    );
-
-    return onSnapshot(questionsQuery, (snapshot) => {
-      console.log('📥 Question snapshot received, docs count:', snapshot.docs.length);
-      
-      if (!snapshot.empty) {
-        const questionDoc = snapshot.docs[0];
-        const questionData = questionDoc.data();
+    const groupDocRef = doc(db, 'groups', groupDocId);
+    
+    return onSnapshot(groupDocRef, async (doc) => {
+      if (doc.exists()) {
+        const groupDocData = doc.data();
+        console.log('🔄 Group data updated');
         
-        console.log('✅ Found question:', questionData.question);
-        console.log('✅ Question status:', questionData.status);
+        setGroupMembers(groupDocData.members || []);
         
-        setCurrentQuestionId(questionDoc.id);
-        setCurrentQuestion(questionData.question);
-        setQuestionOptions(questionData.options || []);
-        setCorrectAnswer(questionData.actual_result || 'Not set');
-        
-        if (questionData.status === "active") {
-          setPredictionStatus('Predictions OPEN');
-        } else if (questionData.status === "closed") {
-          setPredictionStatus('Predictions CLOSED');
-        } else if (questionData.status === "finished") {
-          setPredictionStatus('Results Available');
+        // Check for game changes
+        if (groupDocData.currentGameId && groupDocData.currentGameName) {
+          if (groupDocData.currentGameId !== currentGameId) {
+            console.log('🎮 Group game changed to:', groupDocData.currentGameName);
+            await selectGameForGroup(groupDocData.currentGameId, groupDocData.currentGameName, groupDocData.url);
+          }
+        } else {
+          console.log('🚫 Group cleared game selection');
+          clearGameSelection();
         }
-        
-        checkUserPrediction(questionDoc.id);
-      } else {
-        console.log('❌ No questions found for this game');
-        setCurrentQuestionId(null);
-        setCurrentQuestion('Waiting for question...');
-        setPredictionStatus('Waiting...');
-        setQuestionOptions([]);
-        setCorrectAnswer('Not set');
-        setUserPrediction('');
-        setAllGuesses([]);
       }
     }, (error) => {
-      console.error('❌ Error in question listener:', error);
+      console.error('❌ Error in group listener:', error);
     });
-  }, [playerId]);
+  };
+
+  // Select game for the group
+  const selectGameForGroup = async (gameId: string, gameName: string, gameUrl?: string) => {
+    try {
+      console.log('🎯 Selecting game:', gameName);
+      
+      setCurrentGameId(gameId);
+      setCurrentGame(gameName);
+      setPlayerSelectedGame(gameName);
+      
+      // Get game URL if not provided
+      if (!gameUrl) {
+        const gameDoc = await getDoc(doc(db, 'games', gameId));
+        if (gameDoc.exists()) {
+          const gameData = gameDoc.data();
+          setCurrentGameURL(gameData.url || '');
+        }
+      } else {
+        setCurrentGameURL(gameUrl);
+      }
+      
+      console.log('✅ Game selected successfully');
+      
+    } catch (error) {
+      console.error('❌ Error selecting game:', error);
+    }
+  };
+
+  // Clear game selection
+  const clearGameSelection = () => {
+    console.log('🗑️ Clearing game selection');
+    
+    setCurrentGameId(null);
+    setCurrentGame('No game active');
+    setPlayerSelectedGame(null);
+    setCurrentGameURL('');
+    setCurrentQuestionId(null);
+    setCurrentQuestion('Waiting for question...');
+    setPredictionStatus('Waiting...');
+    setQuestionOptions([]);
+    setCorrectAnswer('Not set');
+    setUserPrediction('');
+    setAllGuesses([]);
+  };
+
+  // Listen for questions when game is selected
+  useEffect(() => {
+    if (currentGameId && playerId) {
+      console.log('🎯 Setting up question listener for game:', currentGameId);
+      
+      const questionsQuery = query(
+        collection(db, "questions"),
+        where("gameId", "==", currentGameId),
+        where("status", "in", ["active", "closed", "finished"]),
+        orderBy("createdAt", "desc"),
+        limit(1)
+      );
+
+      const questionUnsubscribe = onSnapshot(questionsQuery, (snapshot) => {
+        console.log('📥 Question snapshot received, count:', snapshot.docs.length);
+        
+        if (!snapshot.empty) {
+          const questionDoc = snapshot.docs[0];
+          const questionData = questionDoc.data();
+          
+          console.log('✅ Found question:', questionData.question);
+          
+          if (questionData.gameId === currentGameId) {
+            setCurrentQuestionId(questionDoc.id);
+            setCurrentQuestion(questionData.question);
+            setQuestionOptions(questionData.options || []);
+            setCorrectAnswer(questionData.actual_result || 'Not set');
+            
+            if (questionData.status === "active") {
+              setPredictionStatus('Predictions OPEN');
+            } else if (questionData.status === "closed") {
+              setPredictionStatus('Predictions CLOSED');
+            } else if (questionData.status === "finished") {
+              setPredictionStatus('Results Available');
+            }
+            
+            checkUserPrediction(questionDoc.id);
+          }
+        } else {
+          console.log('❌ No questions found');
+          setCurrentQuestionId(null);
+          setCurrentQuestion('Waiting for question...');
+          setPredictionStatus('Waiting...');
+          setQuestionOptions([]);
+          setCorrectAnswer('Not set');
+          setUserPrediction('');
+          setAllGuesses([]);
+        }
+      }, (error) => {
+        console.error('❌ Error in question listener:', error);
+      });
+
+      addUnsubscribeFunction(questionUnsubscribe);
+      
+      return () => {
+        questionUnsubscribe();
+      };
+    }
+  }, [currentGameId, playerId]);
+
+  // Listen for guesses when question is active
+  useEffect(() => {
+    if (currentQuestionId) {
+      console.log('👥 Setting up guess listener');
+      
+      const guessesQuery = query(
+        collection(db, "guesses"),
+        where("questionId", "==", currentQuestionId),
+        orderBy("timestamp", "asc")
+      );
+
+      const guessUnsubscribe = onSnapshot(guessesQuery, (snapshot) => {
+        const guesses: Guess[] = [];
+        snapshot.forEach((doc) => {
+          guesses.push({ id: doc.id, ...doc.data() } as Guess);
+        });
+        console.log(`👥 Updated guesses: ${guesses.length}`);
+        setAllGuesses(guesses);
+      });
+
+      addUnsubscribeFunction(guessUnsubscribe);
+      
+      return () => {
+        guessUnsubscribe();
+      };
+    }
+  }, [currentQuestionId]);
 
   // Check if user already made a prediction
   const checkUserPrediction = useCallback(async (questionId: string) => {
@@ -249,48 +398,33 @@ export default function GroupHome() {
     }
   }, [playerId]);
 
-  // Real-time listener for guesses
-  const loadGuessesRealTime = useCallback(() => {
-    if (!currentQuestionId) return;
+  // Fetch active games
+  const fetchActiveGames = useCallback(async () => {
+    try {
+      const gamesRef = collection(db, 'games');
+      const q = query(gamesRef, where('status', '==', 'active'));
+      const querySnapshot = await getDocs(q);
 
-    const guessesQuery = query(
-      collection(db, "guesses"),
-      where("questionId", "==", currentQuestionId),
-      orderBy("timestamp", "asc")
-    );
-
-    return onSnapshot(guessesQuery, (snapshot) => {
-      const guesses: Guess[] = [];
-      snapshot.forEach((doc) => {
-        guesses.push({ id: doc.id, ...doc.data() } as Guess);
+      const games: Game[] = [];
+      querySnapshot.forEach((doc) => {
+        const data = doc.data();
+        games.push({
+          id: doc.id,
+          ...data,
+          createdAt: data.createdAt?.toDate() || new Date()
+        } as Game);
       });
-      setAllGuesses(guesses);
-    });
-  }, [currentQuestionId]);
 
-  // Set up listeners when game or question changes
-  useEffect(() => {
-    if (currentGameId && playerId) {
-      console.log('🎯 Setting up question listener for game:', currentGameId);
-      const unsubscribeQuestions = listenForActiveQuestions(currentGameId);
-      return () => {
-        if (unsubscribeQuestions) {
-          unsubscribeQuestions();
-        }
-      };
+      setAllGames(games);
+      console.log(`📋 Fetched ${games.length} active games`);
+    } catch (error) {
+      console.error('Error fetching active games:', error);
     }
-  }, [currentGameId, playerId, listenForActiveQuestions]);
+  }, []);
 
   useEffect(() => {
-    if (currentQuestionId) {
-      const unsubscribeGuesses = loadGuessesRealTime();
-      return () => {
-        if (unsubscribeGuesses) {
-          unsubscribeGuesses();
-        }
-      };
-    }
-  }, [currentQuestionId, loadGuessesRealTime]);
+    fetchActiveGames();
+  }, [fetchActiveGames]);
 
   // Player prediction function
   const playerMakePrediction = useCallback(async (choice: string) => {
@@ -305,17 +439,18 @@ export default function GroupHome() {
     }
 
     if (!playerId) {
-      Alert.alert('Error', 'You must be logged in to make a prediction!');
+      Alert.alert('Error', 'You must be logged in!');
       return;
     }
 
     if (userPrediction !== '') {
-      Alert.alert('Error', 'You have already made a prediction for this question!');
+      Alert.alert('Error', 'You already made a prediction!');
       return;
     }
 
     try {
-      // Check if prediction already exists
+      console.log('🎯 Making prediction:', choice);
+      
       const guessQuery = query(
         collection(db, "guesses"),
         where("questionId", "==", currentQuestionId),
@@ -324,14 +459,12 @@ export default function GroupHome() {
       const guessSnapshot = await getDocs(guessQuery);
 
       if (!guessSnapshot.empty) {
-        // Update existing prediction
         const guessDoc = guessSnapshot.docs[0];
         await updateDoc(doc(db, "guesses", guessDoc.id), {
           prediction: choice,
           timestamp: Timestamp.fromDate(new Date())
         });
       } else {
-        // Create new prediction
         await addDoc(collection(db, "guesses"), {
           prediction: choice,
           questionId: currentQuestionId,
@@ -343,7 +476,7 @@ export default function GroupHome() {
       }
       
       setUserPrediction(choice);
-      Alert.alert('Success', `Your prediction: ${choice} has been submitted!`);
+      Alert.alert('Success', `Your prediction: ${choice} submitted!`);
       
     } catch (error) {
       console.error("Error submitting prediction:", error);
@@ -360,21 +493,28 @@ export default function GroupHome() {
         return;
       }
 
-      console.log('✅ Joining game:', selectedGame.name);
+      console.log('🎮 Setting group game to:', selectedGame.name);
       
-      setCurrentGameId(selectedGame.id);
-      setCurrentGame(selectedGame.name);
-      setCurrentGameURL(selectedGame.url || '');
-      setPlayerSelectedGame(selectedGame.name);
-      setCurrentView('player');
-      
-      Alert.alert('Success', `Joined game: ${gameName}`);
+      if (groupDocId) {
+        await updateDoc(doc(db, 'groups', groupDocId), {
+          currentGameId: selectedGame.id,
+          currentGameName: selectedGame.name,
+          url: selectedGame.url || '',
+          lastGameUpdate: Timestamp.fromDate(new Date()),
+          updatedBy: currentUser?.email || playerId
+        });
+        
+        console.log('✅ Group game updated');
+        Alert.alert('Success', `Group is now playing: ${gameName}\n\nAll members will see this game!`);
+      } else {
+        Alert.alert('Error', 'Group not found');
+      }
       
     } catch (error) {
-      console.error('❌ Error joining game:', error);
-      Alert.alert('Error', 'Failed to join game');
+      console.error('❌ Error setting group game:', error);
+      Alert.alert('Error', 'Failed to set group game');
     }
-  }, [allGames]);
+  }, [allGames, groupDocId, currentUser, playerId]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -409,6 +549,13 @@ export default function GroupHome() {
       return '';
     }
   };
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      cleanupAllListeners();
+    };
+  }, []);
 
   // Loading state
   if (!currentUser || isGroupAdmin === null) {
@@ -478,16 +625,19 @@ export default function GroupHome() {
           style={styles.container}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         >
-          <Text style={styles.title}>📃 Select A Game</Text>
+          <Text style={styles.title}>📃 Select Group Game</Text>
           <Text style={styles.welcomeText}>Group Code: {groupCode}</Text>
           <Text style={styles.infoText}>
             🎮 {allGames.length} active games available
+          </Text>
+          <Text style={styles.warningText}>
+            ⚠️ {isGroupAdmin ? 'As group admin, selecting a game sets it for ALL members!' : 'Only group admin can select games.'}
           </Text>
           
           {allGames.length === 0 ? (
             <View style={styles.section}>
               <Text style={styles.noGamesText}>
-                No active games found. Wait for a game master to create one!
+                No active games found. Wait for a Game Master to create one!
               </Text>
             </View>
           ) : (
@@ -496,22 +646,23 @@ export default function GroupHome() {
                 key={`${game.id}-${index}`}
                 style={[
                   styles.gameButton,
-                  playerSelectedGame === game.name && styles.selectedGameButton
+                  playerSelectedGame === game.name && styles.selectedGameButton,
+                  !isGroupAdmin && styles.disabledGameButton
                 ]}
-                onPress={() => joinGameButton(game.name)}
-                activeOpacity={0.7}
+                onPress={() => isGroupAdmin ? joinGameButton(game.name) : Alert.alert('Not Allowed', 'Only group admin can select games.')}
+                activeOpacity={isGroupAdmin ? 0.7 : 1}
               >
                 <View style={styles.gameButtonContent}>
                   <Text style={styles.gameButtonTitle}>{game.name}</Text>
                   <Text style={styles.gameButtonSubtitle}>
-                    Created by: {game.createdBy === currentUser.email ? 'You' : `GM ${game.createdBy.slice(0, 6)}`}
+                    Game Master: {game.createdBy === currentUser.email ? 'You' : game.createdBy.slice(0, 20)}
                   </Text>
                   <Text style={styles.gameButtonTime}>
                     {game.createdAt ? game.createdAt.toLocaleString() : 'Recently'}
                   </Text>
                 </View>
                 {playerSelectedGame === game.name && (
-                  <Text style={styles.selectedBadge}>✓ JOINED</Text>
+                  <Text style={styles.selectedBadge}>✓ PLAYING</Text>
                 )}
               </TouchableOpacity>
             ))
@@ -540,13 +691,19 @@ export default function GroupHome() {
               <View style={styles.section}>
                 <Text style={styles.sectionTitle}>📋 Getting Started</Text>
                 <Text style={styles.instructionText}>
-                  1. Go to the Games tab
+                  {isGroupAdmin ? 
+                    '1. Go to Games tab and select a game for your group' :
+                    '1. Wait for group admin to select a game'
+                  }
                 </Text>
                 <Text style={styles.instructionText}>
-                  2. Select an active game
+                  2. Game Master creates questions in main app
                 </Text>
                 <Text style={styles.instructionText}>
-                  3. Return here to make predictions
+                  3. Questions appear here automatically
+                </Text>
+                <Text style={styles.instructionText}>
+                  4. Make predictions when questions are active
                 </Text>
               </View>
             </View>
@@ -601,7 +758,7 @@ export default function GroupHome() {
                 ))}
                 
                 {predictionStatus === 'Predictions CLOSED' && (
-                  <Text style={styles.closedText}>🛑 Predictions are closed. Waiting for results...</Text>
+                  <Text style={styles.closedText}>🛑 Predictions closed. Waiting for results...</Text>
                 )}
                 
                 {userPrediction !== '' && (
@@ -614,7 +771,7 @@ export default function GroupHome() {
               {/* All Guesses */}
               <View style={styles.section}>
                 <Text style={styles.sectionTitle}>
-                  👥 All Predictions ({allGuesses.length})
+                  👥 Group Predictions ({allGuesses.length})
                 </Text>
                 {allGuesses.length === 0 ? (
                   <Text style={styles.noGuessesText}>No predictions yet. Be the first!</Text>
@@ -632,7 +789,7 @@ export default function GroupHome() {
                         isCurrentUser && styles.currentUserGuess
                       ]}>
                         <Text style={styles.guessText}>
-                          {isCurrentUser ? '👤 You' : (guess.playerEmail || guess.playerId)}: {guess.prediction}
+                          {isCurrentUser ? '👤 You' : (guess.playerEmail || 'Player')}: {guess.prediction}
                           {isCorrect && ' ✅'}
                           {isWrong && ' ❌'}
                           {correctAnswer === 'Not set' && ' ⏳'}
@@ -668,16 +825,16 @@ export default function GroupHome() {
               {/* Debug Info */}
               <View style={styles.debugSection}>
                 <Text style={styles.debugTitle}>🔧 Debug Info</Text>
-                <Text style={styles.debugText}>Is Group Admin: {isGroupAdmin ? 'Yes' : 'No'}</Text>
+                <Text style={styles.debugText}>Group Admin: {isGroupAdmin ? 'Yes' : 'No'}</Text>
                 <Text style={styles.debugText}>Player ID: {playerId}</Text>
+                <Text style={styles.debugText}>Group Doc ID: {groupDocId}</Text>
                 <Text style={styles.debugText}>Selected Game: {playerSelectedGame}</Text>
                 <Text style={styles.debugText}>Current Game ID: {currentGameId}</Text>
                 <Text style={styles.debugText}>Question ID: {currentQuestionId}</Text>
-                <Text style={styles.debugText}>Current Question: {currentQuestion}</Text>
                 <Text style={styles.debugText}>Prediction Status: {predictionStatus}</Text>
-                <Text style={styles.debugText}>Question Options: {questionOptions.join(', ')}</Text>
                 <Text style={styles.debugText}>User Prediction: {userPrediction}</Text>
                 <Text style={styles.debugText}>Total Games: {allGames.length}</Text>
+                <Text style={styles.debugText}>Active Listeners: {unsubscribeFunctions.length}</Text>
               </View>
             </>
           )}
@@ -718,6 +875,16 @@ const styles = StyleSheet.create({
     backgroundColor: '#e8f4fd',
     padding: 10,
     borderRadius: 8,
+  },
+  warningText: {
+    fontSize: 14,
+    textAlign: 'center',
+    marginBottom: 15,
+    color: '#e67e22',
+    backgroundColor: '#fef9e7',
+    padding: 10,
+    borderRadius: 8,
+    fontWeight: '600',
   },
   instructionText: {
     fontSize: 16,
@@ -938,6 +1105,10 @@ const styles = StyleSheet.create({
   selectedGameButton: {
     borderLeftColor: '#27ae60',
     backgroundColor: '#f8fff8',
+  },
+  disabledGameButton: {
+    opacity: 0.6,
+    borderLeftColor: '#95a5a6',
   },
   gameButtonContent: {
     flex: 1,
