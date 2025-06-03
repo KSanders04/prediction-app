@@ -12,6 +12,9 @@ interface Group {
   createdBy: string;
   members: string[];
   groupStatus: 'active' | 'closed'; // Adjust based on your requirements
+  isAdmin: boolean;
+  adminId: string;
+
 }
 
 const SelectedMode = () => {
@@ -59,7 +62,7 @@ const joinGroupButton = async () => {
     // Check if user is already in the group
     if (groupData.members?.includes(currentUser.email)) {
       alert('You are already a member of this group');
-      router.push("/home");
+      router.push("/groupHome");
       return;
     }
 
@@ -80,7 +83,7 @@ const joinGroupButton = async () => {
 
     console.log(`✅ User ${currentUser.email} added to group ${code}`);
     alert('Successfully joined the group!');
-    router.push("/home");
+    router.push("/groupHome");
   } catch (error) {
     console.error("Error joining group:", error);
     alert('Failed to join group. Please try again.');
@@ -107,7 +110,7 @@ const joinGroupButton = async () => {
     if (!alreadyHasGroupSnapshot.empty) {
       const existingGroup = alreadyHasGroupSnapshot.docs[0].data();
       alert('You already have an active group. Here is the code: ' + existingGroup.code);
-      router.push("/home");
+      router.push("/groupHome");
       return;
     }
       const inGroupCreateGroup = query(groupsRef, where('members', 'array-contains', currentUser?.email), where('groupStatus', '==', 'active'));
@@ -126,6 +129,8 @@ const joinGroupButton = async () => {
       createdBy: currentUser?.email || '',  // Assuming you have currentUser from auth
       members: [],
       groupStatus: 'active', // You can set this based on your requirements
+      isAdmin: true,
+      adminId: currentUser?.uid || '',
     };
 
     await addDoc(collection(db, 'groups'), groupData);
@@ -134,7 +139,7 @@ const joinGroupButton = async () => {
     alert(`Your group code is: ${randomCode}`);
     console.log("Group created with code:", randomCode);
     
-    router.push("/home");
+    router.push("/groupHome");
   } catch (error) {
     console.error("Error creating group:", error);
     alert('Failed to create group. Please try again.');

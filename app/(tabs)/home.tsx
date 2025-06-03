@@ -789,7 +789,7 @@ export default function Home() {
 
 
       console.log('Found game:', selectedGame);
-// First, remove user from previous game if exists
+    // First, remove user from previous game if exists
     if (currentGameId) {
       console.log('Removing user from previous game:', currentGameId);
       const previousGameRef = doc(db, "games", currentGameId);
