@@ -32,7 +32,7 @@ const index = () => {
       }
     } catch (error: any) {
       console.log(error);
-      alert("Sign in failed: " + error.message);
+      alert("Sign in failed: Wrong email or password"); // if there is an error, log it and alert the user
     }
   };
 
