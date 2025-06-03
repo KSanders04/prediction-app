@@ -23,6 +23,7 @@ import {
   getDoc,
 } from 'firebase/firestore';
 import YoutubePlayer from 'react-native-youtube-iframe';
+import { get } from 'react-native/Libraries/TurboModule/TurboModuleRegistry';
 
 interface Guess {
   id: string;
@@ -78,10 +79,14 @@ export default function Home() {
   const [groupAdminID, setGroupAdminID] = useState<string>('');
   const [refreshing, setRefreshing] = useState(false);
   const [groupMembers, setGroupMembers] = useState<string[]>([]);
+  const [groupCode, setGroupCode] = useState<string>('');
 
   const [currentGameURL, setCurrentGameURL] = useState('');
   const [isVideoPlaying, setIsVideoPlaying] = useState(true);
   const [playerSelectedGame, setPlayerSelectedGame] = useState<string | null>(null);
+
+
+
 
   // --- GROUP ADMIN LOGIC ---
     useEffect(() => {
@@ -103,6 +108,7 @@ export default function Home() {
             const groupDoc = querySnapshot.docs[0];
             const groupData = groupDoc.data();
 
+            setGroupCode(groupData.code || '');
             // Update admin fields if missing
             if (!groupData.groupAdminID || groupData.groupAdminID === '') {
                 await updateDoc(groupDoc.ref, {
@@ -130,7 +136,9 @@ export default function Home() {
             setIsGroupAdmin(false);
         }
         });
+        
         return () => unsubscribe();
+        
     }, []);
 
   // --- FETCH GAMES ---
@@ -216,6 +224,24 @@ export default function Home() {
       </SafeAreaView>
     );
   }
+const getCurrentCode = async () => {
+      try {
+      const groupsRef = collection(db, 'groups');
+      const q = query(groupsRef, where('groupAdminID', '==', currentUser.uid));
+      const querySnapshot = await getDocs(q);
+      if (!querySnapshot.empty) {
+        const groupDoc = querySnapshot.docs[0];
+        return groupDoc.data().code || '';
+      }
+    } catch (error) {
+      console.error('Error fetching group code:', error);
+    }
+    return '';
+  }
+  getCurrentCode()
+
+
+
 
   // --- TABS ---
   return (
@@ -278,7 +304,7 @@ export default function Home() {
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         >
           <Text style={styles.title}>📃 Select A Game</Text>
-          <Text style={styles.welcomeText}>Welcome, {currentUser?.email}!</Text>
+          <Text style={styles.welcomeText}>Group Code: {groupCode}</Text>
           <Text style={styles.infoText}>
             🎮 {allGames.length} active games available
           </Text>
@@ -327,7 +353,7 @@ export default function Home() {
           {!playerSelectedGame ? (
             <View style={{ alignItems: 'center', marginTop: 40 }}>
               <Text style={styles.title}>🎯 MAKE PREDICTION</Text>
-              <Text style={styles.welcomeText}>Welcome, {currentUser?.email}!</Text>
+              <Text style={styles.welcomeText}>Group Code: {groupCode}</Text>
               <View style={styles.section}>
                 <Text style={styles.sectionTitle}>📋 Getting Started</Text>
                 <Text style={styles.instructionText}>
@@ -344,7 +370,7 @@ export default function Home() {
           ) : (
             <>
               <Text style={styles.title}>🎯 MAKE PREDICTION</Text>
-              <Text style={styles.welcomeText}>Welcome, {currentUser?.email}!</Text>
+              <Text style={styles.welcomeText}>Group Code: {groupCode}</Text>
               {currentGameURL && (
                 <View style={styles.section}>
                   <YoutubePlayer

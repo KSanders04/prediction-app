@@ -62,12 +62,12 @@ const joinGroupButton = async () => {
     // Check if user is already in the group
     if (groupData.members?.includes(currentUser.email)) {
       alert('You are already a member of this group');
-      router.push("/groupHome");
+      router.push("../groupHome");
       return;
     }
 
     // Add user to members array
-    const updatedMembers = [...(groupData.members || []), currentUser.email];
+    const updatedMembers = [...(groupData.members || []), currentUser.uid];
     
     // Update the document with new members list
     await updateDoc(doc(db, 'groups', groupDoc.id), {
@@ -83,7 +83,7 @@ const joinGroupButton = async () => {
 
     console.log(`✅ User ${currentUser.email} added to group ${code}`);
     alert('Successfully joined the group!');
-    router.push("/groupHome");
+    router.push("../groupHome");
   } catch (error) {
     console.error("Error joining group:", error);
     alert('Failed to join group. Please try again.');
@@ -110,7 +110,7 @@ const joinGroupButton = async () => {
     if (!alreadyHasGroupSnapshot.empty) {
       const existingGroup = alreadyHasGroupSnapshot.docs[0].data();
       alert('You already have an active group. Here is the code: ' + existingGroup.code);
-      router.push("/groupHome");
+      router.push("../groupHome");
       return;
     }
       const inGroupCreateGroup = query(groupsRef, where('members', 'array-contains', currentUser?.email), where('groupStatus', '==', 'active'));
@@ -139,7 +139,7 @@ const joinGroupButton = async () => {
     alert(`Your group code is: ${randomCode}`);
     console.log("Group created with code:", randomCode);
     
-    router.push("/groupHome");
+    router.push("../groupHome");
   } catch (error) {
     console.error("Error creating group:", error);
     alert('Failed to create group. Please try again.');
