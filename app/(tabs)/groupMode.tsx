@@ -113,7 +113,7 @@ const joinGroupButton = async () => {
       router.push("../groupHome");
       return;
     }
-      const inGroupCreateGroup = query(groupsRef, where('members', 'array-contains', currentUser?.email), where('groupStatus', '==', 'active'));
+      const inGroupCreateGroup = query(groupsRef, where('members', 'array-contains', currentUser?.uid), where('groupStatus', '==', 'active'));
       const createGroupSnapshot = await getDocs(inGroupCreateGroup);
 
       if (!createGroupSnapshot.empty) {
@@ -178,7 +178,7 @@ const joinGroupButton = async () => {
   const leaveGroupButton = async () => {
     try {
       const groupsRef = collection(db, 'groups');
-      const q = query(groupsRef, where('members', 'array-contains', currentUser?.email), where('groupStatus', '==', 'active'));
+      const q = query(groupsRef, where('members', 'array-contains', currentUser?.uid), where('groupStatus', '==', 'active'));
       const querySnapshot = await getDocs(q);
       // Find the group where the user is a member
       if (!currentUser?.email) {
