@@ -273,7 +273,7 @@ const SelectedMode = () => {
 
       alert('Group closed successfully.');
       await fetchActiveGroup();
-      router.push("/home");
+      //router.push("/home");
     } catch (error) {
       console.error("Error closing group:", error);
     }
