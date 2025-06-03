@@ -1139,7 +1139,7 @@ export default function Home() {
         >
           
           <Text style={styles.title}>🔧 GAMEMASTER PANEL</Text>
-          <Text style={styles.welcomeText}>Welcome, {currentUser?.email}!</Text>
+          <Text style={styles.welcomeText}>Welcome {currentUserData?.firstName} {currentUserData?.lastName}!</Text>
           
           {!adminGameOpen ? (
             <View style={styles.section}>
@@ -1296,7 +1296,7 @@ export default function Home() {
           showsVerticalScrollIndicator={false}
         >
           <Text style={styles.title}>📃 Select A Game</Text>
-          <Text style={styles.welcomeText}>Welcome, {currentUser?.email}!</Text>
+          <Text style={styles.welcomeText}>Welcome {currentUserData?.firstName} {currentUserData?.lastName}!</Text>
           <Text style={styles.infoText}>
             🎮 {allGames.length} active games available from all game masters
           </Text>
@@ -1348,7 +1348,7 @@ export default function Home() {
           {!playerSelectedGame ? (
             <View style={{ alignItems: 'center', marginTop: 40 }}>
               <Text style={styles.title}>🎯 MAKE PREDICTION</Text>
-              <Text style={styles.welcomeText}>Welcome, {currentUser?.email}!</Text>
+              <Text style={styles.welcomeText}>Welcome {currentUserData?.firstName} {currentUserData?.lastName}!</Text>
               <View style={styles.section}>
                 <Text style={styles.sectionTitle}>📋 Getting Started</Text>
                 <Text style={styles.instructionText}>
