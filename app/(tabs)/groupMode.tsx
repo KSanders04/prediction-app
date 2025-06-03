@@ -310,7 +310,7 @@ const SelectedMode = () => {
       await fetchActiveGroup();
 
       alert('You have successfully left your group.');
-      router.push("/home");
+      //router.push("/home");
     } catch (error) {
       console.error("Error leaving group:", error);
     }

@@ -5,7 +5,7 @@ import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import * as ImagePicker from 'expo-image-picker';
 import SignOut from './signout';
-import { UserStats } from '../../components/userStats';
+import { ProfileStats } from '../../components/profileStats';
 import { reauthenticateWithCredential, EmailAuthProvider, updatePassword } from "firebase/auth";
 import { useNavigation } from '@react-navigation/native';
 
@@ -301,7 +301,7 @@ export default function Profile() {
           )}
 
           <View style={{ marginTop: 10, width: '100%' }}>
-            <UserStats
+            <ProfileStats
               currentUser={userData}
               authUser={authUser}
               getCurrentUserRank={getCurrentUserRank}
