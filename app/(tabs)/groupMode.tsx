@@ -1,4 +1,4 @@
-import { View, Text, TouchableOpacity, StyleSheet, TextInput } from "react-native";
+import { ScrollView, View, Text, TouchableOpacity, StyleSheet, TextInput } from "react-native";
 import { router } from "expo-router";
 import React from "react";
 import { arrayUnion, arrayRemove } from 'firebase/firestore';
@@ -22,6 +22,39 @@ const SelectedMode = () => {
   const [groupcode, setGroupCode] = React.useState('');
   const [code, setCode] = React.useState("");
   const currentUser = auth.currentUser;
+  const [activeGroup, setActiveGroup] = React.useState<Group | null>(null);
+
+React.useEffect(() => {
+  const fetchActiveGroup = async () => {
+    if (!currentUser) return;
+    const groupsRef = collection(db, 'groups');
+    // Find group where user is admin or member and group is active
+    const q = query(
+      groupsRef,
+      where('groupStatus', '==', 'active'),
+      where('members', 'array-contains', currentUser.uid)
+    );
+    const snapshot = await getDocs(q);
+
+    // Also check if user is admin (createdBy)
+    const adminQ = query(
+      groupsRef,
+      where('groupStatus', '==', 'active'),
+      where('createdBy', '==', currentUser.email)
+    );
+    const adminSnapshot = await getDocs(adminQ);
+
+    if (!snapshot.empty) {
+      setActiveGroup(snapshot.docs[0].data() as Group);
+    } else if (!adminSnapshot.empty) {
+      setActiveGroup(adminSnapshot.docs[0].data() as Group);
+    } else {
+      setActiveGroup(null);
+    }
+  };
+
+  fetchActiveGroup();
+}, [currentUser]);
 
 const joinGroupButton = async () => {
   try {
@@ -215,8 +248,35 @@ const joinGroupButton = async () => {
   }
 
   return (
-    <View style={styles.container}>
+    <ScrollView 
+    style={styles.container}
+    contentContainerStyle={{ alignItems: 'center', justifyContent: 'center' }}>
       <Text style={styles.title}>Groups</Text>
+
+      {activeGroup ? (
+        <TouchableOpacity style={
+          styles.section} 
+          onPress={() => {
+          router.push("../groupHome");
+        }}>
+          <Text style={styles.infoText}>
+            Active Group Code: <Text style={{fontWeight: 'bold'}}>{activeGroup.code}</Text>
+          </Text>
+          <Text style={styles.infoText}>
+            Group Admin: {activeGroup.createdBy}
+          </Text>
+          <Text style={styles.infoText}>
+            Group Members: {activeGroup.members.length}
+          </Text>
+          <TouchableOpacity style={styles.button} onPress={leaveGroupButton}>
+            <Text style={styles.buttonText}>Leave Group</Text>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      ) : (
+        <View style={styles.section}>
+          <Text style={styles.infoText}>You are not in any active group.</Text>
+        </View>
+      )}
 
       <View style={styles.section}>
         <TextInput
@@ -226,35 +286,28 @@ const joinGroupButton = async () => {
           onChangeText={setCode}
           placeholderTextColor="#7f8c8d"
         />
-        
+
         <TouchableOpacity style={styles.button} onPress={joinGroupButton}>
           <Text style={styles.buttonText}>Join Group</Text>
         </TouchableOpacity>
-        
+
         <TouchableOpacity style={styles.button} onPress={createGroupButton}>
           <Text style={styles.buttonText}>Create Group</Text>
         </TouchableOpacity>
-        
+
         <TouchableOpacity style={styles.button} onPress={closeGroupButton}>
           <Text style={styles.buttonText}>Close Group</Text>
         </TouchableOpacity>
-        
-        <TouchableOpacity style={styles.button} onPress={leaveGroupButton}>
-          <Text style={styles.buttonText}>Leave Group</Text>
-        </TouchableOpacity>
       </View>
-    </View>
+    </ScrollView>
   );
-
-}
+};
 
 export default SelectedMode;
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
     padding: 20,
     backgroundColor: "#F5F5F5",
   },
