@@ -1,4 +1,4 @@
-import { View, Text, TouchableOpacity, StyleSheet, TextInput } from "react-native";
+import { View, Text, TouchableOpacity, StyleSheet, TextInput, Alert, Modal } from "react-native";
 import { router } from "expo-router";
 import React from "react";
 import { arrayUnion, arrayRemove } from 'firebase/firestore';
@@ -11,17 +11,71 @@ interface Group {
   createdAt: Date;
   createdBy: string;
   members: string[];
-  groupStatus: 'active' | 'closed'; // Adjust based on your requirements
+  groupStatus: 'active' | 'closed'; 
   isAdmin: boolean;
   adminId: string;
+  groupName: string; 
 
 }
+const GroupCreateModal = ({ 
+  isModalVisible, 
+  setIsModalVisible, 
+  groupName, 
+  setGroupName, 
+  handleCreateGroup 
+}: {
+  isModalVisible: boolean;
+  setIsModalVisible: (visible: boolean) => void;
+  groupName: string;
+  setGroupName: (name: string) => void;
+  handleCreateGroup: () => Promise<void>;
+}) => (
+  <Modal
+    animationType="slide"
+    transparent={true}
+    visible={isModalVisible}
+    onRequestClose={() => setIsModalVisible(false)}
+  >
+    <View style={styles.modalContainer}>
+      <View style={styles.modalContent}>
+        <Text style={styles.modalTitle}>Create New Group</Text>
+        <TextInput
+          style={styles.modalInput}
+          placeholder="Enter group name"
+          value={groupName}
+          onChangeText={setGroupName}
+          placeholderTextColor="#7f8c8d"
+        />
+        <View style={styles.modalButtons}>
+          <TouchableOpacity
+            style={[styles.modalButton, styles.cancelButton]}
+            onPress={() => {
+              setIsModalVisible(false);
+              setGroupName('');
+            }}
+          >
+            <Text style={styles.buttonText}>Cancel</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.modalButton, styles.createButton]}
+            onPress={handleCreateGroup}
+          >
+            <Text style={styles.buttonText}>Create</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </View>
+  </Modal>
+);
 
 const SelectedMode = () => {
 
   const [groupcode, setGroupCode] = React.useState('');
   const [code, setCode] = React.useState("");
   const currentUser = auth.currentUser;
+  const [isModalVisible, setIsModalVisible] = React.useState(false);
+  const [groupName, setGroupName] = React.useState('');
+
 
 const joinGroupButton = async () => {
   try {
@@ -89,62 +143,84 @@ const joinGroupButton = async () => {
     alert('Failed to join group. Please try again.');
   }
 };
-  const createGroupButton = async () => { 
+const handleCreateGroup = async () => {
+  if (!groupName.trim()) {
+    alert('Please enter a group name');
+    return;
+  }
+
   try {
     const min = 100000;
     const max = 999999;
     const randomCode = Math.floor(Math.random() * (max - min + 1)) + min;
-    
-    // Check if code already exists
-    const groupsRef = collection(db, 'groups');
-    const q = query(groupsRef, where('code', '==', randomCode.toString()));
-    const querySnapshot = await getDocs(q);
-    
-    if (!querySnapshot.empty) {
-      alert('Code already exists, please try again');
-      return;
-    }
-    const alreadyHasGroup = query(groupsRef, where('createdBy', '==', currentUser?.email), where('groupStatus', '==', 'active'));
-    const alreadyHasGroupSnapshot = await getDocs(alreadyHasGroup);
-    // Check if user already has an active group
-    if (!alreadyHasGroupSnapshot.empty) {
-      const existingGroup = alreadyHasGroupSnapshot.docs[0].data();
-      alert('You already have an active group. Here is the code: ' + existingGroup.code);
-      router.push("../groupHome");
-      return;
-    }
-      const inGroupCreateGroup = query(groupsRef, where('members', 'array-contains', currentUser?.uid), where('groupStatus', '==', 'active'));
-      const createGroupSnapshot = await getDocs(inGroupCreateGroup);
 
-      if (!createGroupSnapshot.empty) {
-        alert('You are already in a group. Please leave the group before creating a new one.');
-        return;
-      }
-
-
-    // Create new group document
     const groupData: Group = {
       code: randomCode.toString(),
       createdAt: new Date(),
-      createdBy: currentUser?.email || '',  // Assuming you have currentUser from auth
-      members: [],
-      groupStatus: 'active', // You can set this based on your requirements
+      createdBy: currentUser?.email || '',
+      members: [currentUser?.uid || ''],
+      groupStatus: 'active',
       isAdmin: true,
       adminId: currentUser?.uid || '',
+      groupName: groupName.trim()
     };
 
     await addDoc(collection(db, 'groups'), groupData);
     
     setGroupCode(randomCode.toString());
-    alert(`Your group code is: ${randomCode}`);
+    alert(`Group "${groupName}" created! Your group code is: ${randomCode}`);
     console.log("Group created with code:", randomCode);
     
+    setIsModalVisible(false);
+    setGroupName('');
     router.push("../groupHome");
   } catch (error) {
     console.error("Error creating group:", error);
     alert('Failed to create group. Please try again.');
   }
 };
+
+const createGroupButton = async () => {
+  try {
+    if (!currentUser?.email) {
+      alert('You must be logged in to create a group');
+      return;
+    }
+
+    const groupsRef = collection(db, 'groups');
+    const alreadyHasGroup = query(
+      groupsRef, 
+      where('createdBy', '==', currentUser.email),
+      where('groupStatus', '==', 'active')
+    );
+    const alreadyHasGroupSnapshot = await getDocs(alreadyHasGroup);
+
+    if (!alreadyHasGroupSnapshot.empty) {
+      const existingGroup = alreadyHasGroupSnapshot.docs[0].data();
+      alert('You already have an active group. Code: ' + existingGroup.code);
+      router.push("../groupHome");
+      return;
+    }
+
+    const inGroupCreateGroup = query(
+      groupsRef,
+      where('members', 'array-contains', currentUser.uid),
+      where('groupStatus', '==', 'active')
+    );
+    const createGroupSnapshot = await getDocs(inGroupCreateGroup);
+
+    if (!createGroupSnapshot.empty) {
+      alert('You are already in a group. Please leave before creating a new one.');
+      return;
+    }
+
+    setIsModalVisible(true);
+  } catch (error) {
+    console.error("Error:", error);
+    alert('Failed to create group. Please try again.');
+  }
+};
+
   const closeGroupButton = async () => {
 
     try {
@@ -197,7 +273,7 @@ const joinGroupButton = async () => {
 
       
       await updateDoc(doc(db, 'groups', groupDoc.id), {
-        members: groupData.members.filter(member => member !== currentUser.email)
+        members: groupData.members.filter(member => member !== currentUser.uid)
       });
 
       //REMOVE group from user's groups array ---
@@ -213,6 +289,7 @@ const joinGroupButton = async () => {
       console.error("Error closing group:", error);
     }
   }
+// Add this component inside SelectedMode but before the return statement
 
   return (
     <View style={styles.container}>
@@ -243,6 +320,13 @@ const joinGroupButton = async () => {
           <Text style={styles.buttonText}>Leave Group</Text>
         </TouchableOpacity>
       </View>
+      <GroupCreateModal 
+        isModalVisible={isModalVisible}
+        setIsModalVisible={setIsModalVisible}
+        groupName={groupName}
+        setGroupName={setGroupName}
+        handleCreateGroup={handleCreateGroup}
+      />
     </View>
   );
 
@@ -377,5 +461,53 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     fontSize: 12,
     fontWeight: 'bold',
-  }
+  },
+  modalContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.5)',
+  },
+  modalContent: {
+    backgroundColor: 'white',
+    padding: 20,
+    borderRadius: 15,
+    width: '80%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#2c3e50',
+    marginBottom: 15,
+    textAlign: 'center',
+  },
+  modalInput: {
+    borderWidth: 1,
+    borderColor: '#ecf0f1',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 20,
+    fontSize: 16,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  modalButton: {
+    padding: 12,
+    borderRadius: 8,
+    width: '45%',
+    alignItems: 'center',
+  },
+  cancelButton: {
+    backgroundColor: '#95a5a6',
+  },
+  createButton: {
+    backgroundColor: '#3498db',
+  },
 });
