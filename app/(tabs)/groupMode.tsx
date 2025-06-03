@@ -1,4 +1,4 @@
-import { ScrollView, View, Text, TouchableOpacity, StyleSheet, TextInput } from "react-native";
+import { ScrollView, View, Text, TouchableOpacity, StyleSheet, TextInput, RefreshControl } from "react-native";
 import { router } from "expo-router";
 import React from "react";
 import { arrayUnion, arrayRemove } from 'firebase/firestore';
@@ -6,6 +6,7 @@ import { arrayUnion, arrayRemove } from 'firebase/firestore';
 import { collection, addDoc, query, where, getDocs } from 'firebase/firestore';
 import { db, auth } from '../../firebaseConfig';
 import { updateDoc, doc } from 'firebase/firestore';
+import { useEffect, useState } from "react";
 interface Group {
   code: string;
   createdAt: Date;
@@ -19,40 +20,42 @@ interface Group {
 
 const SelectedMode = () => {
 
-  const [groupcode, setGroupCode] = React.useState('');
-  const [code, setCode] = React.useState("");
+  const [groupcode, setGroupCode] = useState('');
+  const [code, setCode] = useState("");
   const currentUser = auth.currentUser;
-  const [activeGroup, setActiveGroup] = React.useState<Group | null>(null);
+  const [activeGroup, setActiveGroup] = useState<Group | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  
 
-React.useEffect(() => {
-  const fetchActiveGroup = async () => {
-    if (!currentUser) return;
-    const groupsRef = collection(db, 'groups');
-    // Find group where user is admin or member and group is active
-    const q = query(
-      groupsRef,
-      where('groupStatus', '==', 'active'),
-      where('members', 'array-contains', currentUser.uid)
-    );
-    const snapshot = await getDocs(q);
+    const fetchActiveGroup = async () => {
+      if (!currentUser) return;
+      const groupsRef = collection(db, 'groups');
+      // Find group where user is admin or member and group is active
+      const q = query(
+        groupsRef,
+        where('groupStatus', '==', 'active'),
+        where('members', 'array-contains', currentUser.uid)
+      );
+      const snapshot = await getDocs(q);
 
-    // Also check if user is admin (createdBy)
-    const adminQ = query(
-      groupsRef,
-      where('groupStatus', '==', 'active'),
-      where('createdBy', '==', currentUser.email)
-    );
-    const adminSnapshot = await getDocs(adminQ);
+      // Also check if user is admin (createdBy)
+      const adminQ = query(
+        groupsRef,
+        where('groupStatus', '==', 'active'),
+        where('createdBy', '==', currentUser.email)
+      );
+      const adminSnapshot = await getDocs(adminQ);
 
-    if (!snapshot.empty) {
-      setActiveGroup(snapshot.docs[0].data() as Group);
-    } else if (!adminSnapshot.empty) {
-      setActiveGroup(adminSnapshot.docs[0].data() as Group);
-    } else {
-      setActiveGroup(null);
-    }
+      if (!snapshot.empty) {
+        setActiveGroup(snapshot.docs[0].data() as Group);
+      } else if (!adminSnapshot.empty) {
+        setActiveGroup(adminSnapshot.docs[0].data() as Group);
+      } else {
+        setActiveGroup(null);
+      }
   };
 
+useEffect(() => {
   fetchActiveGroup();
 }, [currentUser]);
 
@@ -76,9 +79,7 @@ const joinGroupButton = async () => {
     if (querySnapshot.empty) {
       alert('Group not found. Please check the code and try again.');
       return;
-    }
-
-    
+    } 
 
     const groupDoc = querySnapshot.docs[0];
     const groupData = groupDoc.data();
@@ -122,6 +123,14 @@ const joinGroupButton = async () => {
     alert('Failed to join group. Please try again.');
   }
 };
+
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await fetchActiveGroup();
+    setRefreshing(false);
+  };   
+
   const createGroupButton = async () => { 
   try {
     const min = 100000;
@@ -218,7 +227,6 @@ const joinGroupButton = async () => {
         alert('You must be logged in to leave a group');
         return;
       }
-
       
       if (querySnapshot.empty) {
         alert('You are not a member of any active group.');
@@ -226,8 +234,6 @@ const joinGroupButton = async () => {
       }
       const groupDoc = querySnapshot.docs[0];
       const groupData = groupDoc.data() as Group;
-
-
       
       await updateDoc(doc(db, 'groups', groupDoc.id), {
         members: groupData.members.filter(member => member !== currentUser.email)
@@ -238,6 +244,9 @@ const joinGroupButton = async () => {
       await updateDoc(userRef, {
         groups: arrayRemove(groupDoc.id)
       });
+
+      await fetchActiveGroup();
+
       // --------------------------------------------
 
       alert('You have successfully left your group.');
@@ -250,7 +259,9 @@ const joinGroupButton = async () => {
   return (
     <ScrollView 
     style={styles.container}
-    contentContainerStyle={{ alignItems: 'center', justifyContent: 'center' }}>
+    contentContainerStyle={{ alignItems: 'center', justifyContent: 'center' }}
+    refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+    >
       <Text style={styles.title}>Groups</Text>
 
       {activeGroup ? (
@@ -268,9 +279,17 @@ const joinGroupButton = async () => {
           <Text style={styles.infoText}>
             Group Members: {activeGroup.members.length}
           </Text>
-          <TouchableOpacity style={styles.button} onPress={leaveGroupButton}>
-            <Text style={styles.buttonText}>Leave Group</Text>
-          </TouchableOpacity>
+
+          {/* Show Close Group if admin, else Leave Group */}
+          {activeGroup.createdBy === currentUser?.email ? (
+            <TouchableOpacity style={styles.button} onPress={closeGroupButton}>
+              <Text style={styles.buttonText}>Close Group</Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity style={styles.button} onPress={leaveGroupButton}>
+              <Text style={styles.buttonText}>Leave Group</Text>
+            </TouchableOpacity>
+          )}
         </TouchableOpacity>
       ) : (
         <View style={styles.section}>
@@ -432,3 +451,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   }
 });
+
+function fetchActiveGames() {
+  throw new Error("Function not implemented.");
+}
