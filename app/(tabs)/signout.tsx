@@ -1,4 +1,4 @@
-import { StyleSheet, TouchableOpacity, Text, View } from 'react-native';
+import { StyleSheet, TouchableOpacity, Text, View, Alert } from 'react-native';
 import { auth } from '../../firebaseConfig';
 import { getAuth } from 'firebase/auth';
 import { router } from 'expo-router';
@@ -8,16 +8,25 @@ export default function TabOneScreen() {
     if (!user) router.replace('/'); // if user is not logged in return them to the login page
   });
 
-const handleSignOut = async () => { // function to handle all the sign out and alert user 
-  alert("Sign Out Successful")
-  router.replace('/')
-  await auth.signOut()
-}
+  const handleSignOut = async () => {
+    Alert.alert(
+      "Sign Out",
+      "Are you sure you want to sign out?",
+      [
+        { text: "Cancel", style: "cancel" },
+        { text: "Sign Out", style: "destructive", onPress: async () => {
+            await auth.signOut();
+            router.replace('/');
+          }
+        }
+      ]
+    );
+  };
 
   return (
-      <TouchableOpacity style={styles.button} onPress={(handleSignOut)}>
-        <Text style={styles.text}>Sign Out</Text>
-      </TouchableOpacity>
+    <TouchableOpacity style={styles.button} onPress={handleSignOut}>
+      <Text style={styles.text}>Sign Out</Text>
+    </TouchableOpacity>
   );
 }
 
@@ -61,5 +70,3 @@ const styles = StyleSheet.create({
     fontWeight: '600', 
   }
 });
-
-
