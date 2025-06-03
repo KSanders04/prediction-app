@@ -85,6 +85,7 @@ export default function GroupHome() {
   const [playerSelectedGame, setPlayerSelectedGame] = useState<string | null>(null);
   const [groupData, setGroupData] = useState<GroupData | null>(null);
   const [groupDocId, setGroupDocId] = useState<string | null>(null);
+  const [groupLeaderboard, setGroupLeaderboard] = useState<any[]>([]);
 
   // Cleanup functions for listeners
   const [unsubscribeFunctions, setUnsubscribeFunctions] = useState<Array<() => void>>([]);
@@ -557,6 +558,33 @@ export default function GroupHome() {
     };
   }, []);
 
+  // Fetch group leaderboard when groupMembers changes
+  useEffect(() => {
+    const fetchGroupLeaderboard = async () => {
+      if (!groupMembers || groupMembers.length === 0) {
+        setGroupLeaderboard([]);
+        return;
+      }
+      try {
+        // Fetch all user docs for group members
+        const usersRef = collection(db, "users");
+        const usersSnapshot = await getDocs(usersRef);
+        const users: any[] = [];
+        usersSnapshot.forEach((doc) => {
+          if (groupMembers.includes(doc.id)) {
+            users.push({ id: doc.id, ...doc.data() });
+          }
+        });
+        // Sort by totalPoints descending
+        users.sort((a, b) => (b.totalPoints || 0) - (a.totalPoints || 0));
+        setGroupLeaderboard(users);
+      } catch (error) {
+        console.error("Error fetching group leaderboard:", error);
+      }
+    };
+    fetchGroupLeaderboard();
+  }, [groupMembers]);
+
   // Loading state
   if (!currentUser || isGroupAdmin === null) {
     return (
@@ -670,13 +698,32 @@ export default function GroupHome() {
         </ScrollView>
       ) : currentView === 'leaderboard' ? (
         <ScrollView style={styles.container}>
-          <Text style={styles.title}>🏆 Leaderboard</Text>
+          <Text style={styles.title}>🏆 Group Leaderboard</Text>
           <Text style={styles.welcomeText}>Group Code: {groupCode}</Text>
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Group Leaderboard</Text>
-            <Text style={styles.instructionText}>
-              Leaderboard functionality coming soon!
-            </Text>
+            {groupLeaderboard.length === 0 ? (
+              <Text style={styles.noGamesText}>No group members found.</Text>
+            ) : (
+              groupLeaderboard.map((user, idx) => (
+                <View
+                  key={user.id}
+                  style={[
+                    styles.leaderboardItem,
+                    idx === 0 && { backgroundColor: '#fff8e1', borderLeftColor: '#ffc107' }
+                  ]}
+                >
+                  <Text style={{ fontWeight: 'bold', fontSize: 18, width: 30 }}>{idx + 1}</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontWeight: 'bold', color: '#2c3e50' }}>
+                      {user.userName || user.email || `User_${user.id.slice(0, 6)}`}
+                    </Text>
+                    <Text style={{ color: '#7f8c8d', fontSize: 12 }}>
+                      {user.totalPoints || 0} pts • {user.gamesPlayed || 0} games
+                    </Text>
+                  </View>
+                </View>
+              ))
+            )}
           </View>
         </ScrollView>
       ) : (
@@ -1172,5 +1219,34 @@ const styles = StyleSheet.create({
     color: '#6c757d',
     marginBottom: 3,
     fontFamily: 'monospace',
+  },
+  leaderboardItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 15,
+    marginBottom: 8,
+    backgroundColor: '#f8f9fa',
+    borderRadius: 12,
+    borderLeftWidth: 3,
+    borderLeftColor: '#bdc3c7',
+  },
+  leaderboardRank: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#2c3e50',
+    width: 40,
+  },
+  leaderboardName: {
+    fontSize: 16,
+    color: '#34495e',
+    flex: 1,
+  },
+  leaderboardPoints: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#27ae60',
+    width: 80,
+    textAlign: 'right',
   },
 });
