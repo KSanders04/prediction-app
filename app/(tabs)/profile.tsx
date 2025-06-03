@@ -206,16 +206,6 @@ export default function Profile() {
           </View>
 
           <View style={[styles.statsContainer, { marginTop: 35, marginBottom: -10 }]}>
-            <View style={styles.statBox}>
-              <Text style={styles.statNumber}>0</Text>
-              <Text style={styles.statLabel}>Friends</Text>
-            </View>
-            <View style={styles.statBox}>
-              <Text style={styles.statNumber}>
-                {userData.groups ? userData.groups.length : 0}
-              </Text>
-              <Text style={styles.statLabel}>Groups</Text>
-            </View>
             <TouchableOpacity
               style={styles.editUsernameButton}
               onPress={() => {
@@ -300,7 +290,20 @@ export default function Profile() {
             </View>
           )}
 
-          <View style={{ marginTop: 10, width: '100%' }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'center', marginTop: 20, marginBottom: -10 }}>
+            <View style={styles.statBox}>
+              <Text style={styles.statNumber}>0</Text>
+              <Text style={styles.statLabel}>Friends</Text>
+            </View>
+            <View style={styles.statBox}>
+              <Text style={styles.statNumber}>
+              {userData.groups ? userData.groups.length : 0}
+              </Text>
+              <Text style={styles.statLabel}>Groups</Text>
+            </View>
+            </View>
+
+            <View style={{ marginTop: 10, width: '100%' }}>
             <ProfileStats
               currentUser={userData}
               authUser={authUser}
@@ -309,7 +312,7 @@ export default function Profile() {
               getAccuracy={getAccuracy}
               formatLastPlayed={formatLastPlayed}
             />
-          </View>
+            </View>
           <SignOut />
         </>
       )}
@@ -352,6 +355,7 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     color: '#2c3e50',
+    marginTop: 10,
   },
   statLabel: {
     fontSize: 14,

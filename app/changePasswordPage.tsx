@@ -51,6 +51,7 @@ export default function ChangePasswordPage() {
         value={currentPassword}
         onChangeText={setCurrentPassword}
         placeholder="Current Password"
+        placeholderTextColor="#555"
         secureTextEntry
         autoFocus
       />
@@ -59,6 +60,7 @@ export default function ChangePasswordPage() {
         value={newPassword}
         onChangeText={setNewPassword}
         placeholder="New Password"
+        placeholderTextColor="#555"
         secureTextEntry
       />
       <TextInput
@@ -66,6 +68,7 @@ export default function ChangePasswordPage() {
         value={confirmPassword}
         onChangeText={setConfirmPassword}
         placeholder="Confirm New Password"
+        placeholderTextColor="#555"
         secureTextEntry
       />
       <View style={{ flexDirection: 'row', marginTop: 20 }}>
@@ -98,13 +101,16 @@ const styles = StyleSheet.create({
     color: '#2c3e50',
   },
   input: {
-    borderBottomWidth: 1,
-    borderColor: '#3498db',
+    height: 50,
+    borderColor: "#ccc",
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 15,
+    marginBottom: 20,
+    backgroundColor: "#fff",
     fontSize: 16,
-    padding: 8,
-    marginVertical: 10,
-    width: 260,
     color: 'black',
+    width: 260,
   },
   saveButton: {
     backgroundColor: '#3498db',
