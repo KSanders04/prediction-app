@@ -5,6 +5,7 @@ import {createUserWithEmailAndPassword,signInWithEmailAndPassword} from "firebas
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router } from "expo-router";
 import { doc, setDoc, getDoc, query, collection, where, getDocs } from 'firebase/firestore';
+import { View } from "@/components/Themed";
 
 const index = () => {
     const [email, setEmail] = useState(""); // set up states for the email and password originally just empty strings
@@ -99,30 +100,36 @@ const index = () => {
   // Sign in with google import did not work on expo go, needs to be within use of expo dev client
   return (
     <SafeAreaView style={styles.container}>
-      <Text style={styles.title}>Create Account</Text>
+      <Text style={styles.title}>Create An Account</Text>
+        <View style={styles.nameContainer}>
+          <TextInput
+              style={styles.firstNameInput}
+              placeholder="First Name"
+              value={firstName}
+              onChangeText={setFirstName}
+              placeholderTextColor="#3C4858"
+          />
+          <TextInput
+              style={styles.lastNameInput}
+              placeholder="Last Name"
+              value={lastName}
+              onChangeText={setLastName}
+              placeholderTextColor="#3C4858"
+          />
+        </View>
         <TextInput
             style={styles.textInput}
-            placeholder="First Name"
-            value={firstName}
-            onChangeText={setFirstName}
-        />
-        <TextInput
-            style={styles.textInput}
-            placeholder="Last Name"
-            value={lastName}
-            onChangeText={setLastName}
-        />
-        <TextInput
-            style={styles.textInput}
-            placeholder="User Name"
+            placeholder="Username"
             value={userName}
             onChangeText={setUserName}
+            placeholderTextColor="#3C4858"
         />
         <TextInput
             style={styles.textInput}
             placeholder="Email"
             value={email}
             onChangeText={setEmail}
+            placeholderTextColor="#3C4858"
         />
         <TextInput
             style={styles.textInput}
@@ -130,9 +137,10 @@ const index = () => {
             value={password}
             onChangeText={setPassword}
             secureTextEntry
+            placeholderTextColor="#3C4858"
         />
       <TouchableOpacity style={styles.button} onPress={(emailSignUp)}>
-        <Text style={styles.text}>Make Account</Text>
+        <Text style={styles.text}>Create Account</Text>
       </TouchableOpacity>
     </SafeAreaView>
   );
@@ -145,6 +153,14 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
+    backgroundColor: "#FAFAFA",
+  },
+  nameContainer: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    width: '90%',
+    marginBottom: 10,
     backgroundColor: "#FAFAFA",
   },
   title: {
@@ -161,6 +177,40 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderRadius: 15,
     marginVertical: 15,
+    paddingHorizontal: 25,
+    fontSize: 16,
+    color: "#3C4858",
+    shadowColor: "#9E9E9E",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  firstNameInput: {
+    height: 50,
+    width: "48%",
+    backgroundColor: "#FFFFFF",
+    borderColor: "#E8EAF6",
+    borderWidth: 2,
+    borderRadius: 15,
+    marginVertical: 0,
+    paddingHorizontal: 25,
+    fontSize: 16,
+    color: "#3C4858",
+    shadowColor: "#9E9E9E",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  lastNameInput: {
+    height: 50,
+    width: "48%",
+    backgroundColor: "#FFFFFF",
+    borderColor: "#E8EAF6",
+    borderWidth: 2,
+    borderRadius: 15,
+    marginVertical: 0,
     paddingHorizontal: 25,
     fontSize: 16,
     color: "#3C4858",

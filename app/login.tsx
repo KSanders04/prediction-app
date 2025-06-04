@@ -42,22 +42,24 @@ const index = () => {
       <Text style={styles.title}>Login</Text>
       <TextInput
         style={styles.textInput}
-        placeholder="email"
+        placeholder="Email"
         value={email}
         onChangeText={setEmail}
+        placeholderTextColor="#3C4858"
       />
       <TextInput
         style={styles.textInput}
-        placeholder="password"
+        placeholder="Password"
         value={password}
         onChangeText={setPassword}
         secureTextEntry
+        placeholderTextColor="#3C4858"
       />
       <TouchableOpacity style={styles.button} onPress={emailSignIn}>
         <Text style={styles.text}>Login</Text>
       </TouchableOpacity>
       <TouchableOpacity style={styles.button} onPress={() => router.push("/createAccount")}>
-        <Text style={styles.text}>Make Account</Text>
+        <Text style={styles.text}>Create Account</Text>
       </TouchableOpacity>
     </SafeAreaView>
   );
