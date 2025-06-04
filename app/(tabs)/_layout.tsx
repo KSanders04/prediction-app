@@ -90,7 +90,7 @@ export default function TabLayout() {
         name="groupMode"
         options={{ 
           title: 'Group Mode',
-          tabBarIcon: ({ color }) => <TabBarIcon name="sign-out" color={color} />,
+          tabBarIcon: ({ color }) => <TabBarIcon name="group" color={color} />,
           headerRight: () => (
             <Link href="/modal" asChild>
               <Pressable>
@@ -117,7 +117,7 @@ export default function TabLayout() {
               <Pressable>
                 {({ pressed }) => (
                   <FontAwesome
-                    name="info-circle"
+                    name="gear"
                     size={25}
                     color={Colors[colorScheme ?? 'light'].text}
                     style={{ marginRight: 15, opacity: pressed ? 0.5 : 1 }}
