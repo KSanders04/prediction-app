@@ -1,95 +1,19 @@
-import { Text, StyleSheet, TextInput, TouchableOpacity, SafeAreaView, KeyboardAvoidingView, Platform, ScrollView, TouchableWithoutFeedback, Keyboard } from "react-native";
-import React, { useState, useEffect } from "react";
-import { auth, db } from "../firebaseConfig";
-import {createUserWithEmailAndPassword,signInWithEmailAndPassword} from "firebase/auth";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import { Text, View, StyleSheet, TextInput, TouchableOpacity, SafeAreaView, KeyboardAvoidingView, Platform, ScrollView, TouchableWithoutFeedback, Keyboard } from "react-native";
+import React, { useState } from "react";
 import { router } from "expo-router";
-import { doc, setDoc, getDoc, query, collection, where, getDocs } from 'firebase/firestore';
-import { View } from "@/components/Themed";
+import { emailSignUp } from "@/components/firebaseFunctions";
 
 const index = () => {
-    const [email, setEmail] = useState(""); // set up states for the email and password originally just empty strings
-    const [password, setPassword] = useState("");
-    const [firstName, setFirstName] = useState("");
-    const [lastName, setLastName] = useState("");
-    const [userName, setUserName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [userName, setUserName] = useState("");
 
-  const emailSignUp = async () => {
+  const handleSignUp = async () => {
     try {
-    //Check if username exists
-    const usernameQuery = query(
-      collection(db, 'users'),
-      where('userName', '==', userName)
-    );
-    const usernameSnapshot = await getDocs(usernameQuery);
-    console.log(usernameSnapshot.docs.length)
-
-    if (!userName.trim()) {
-      alert("Username cannot be empty.");
-      return;
-    }
-
-    if (userName.trim().length < 6) {
-        alert("Username must be at least 6 characters long.");
-        return;
-    }
-
-    if (!firstName.trim() || !lastName.trim()) {
-      alert("First and last name cannot be empty.");
-      return;
-    }
-
-    if (!email.trim() || !password.trim()) {
-      alert("Email and password cannot be empty.");
-      return;
-    }
-
-    if (!usernameSnapshot.empty) {
-      alert("That username is already taken. Please choose another.");
-      return;
-    }
-
-    if (password.length < 6) {
-      alert("Password must be at least 6 characters long.");
-      return;
-    }
-
-      //Check if email exists
-      const emailQuery = query(
-        collection(db, 'users'),
-        where('email', '==', email)
-      );
-      const emailSnapshot = await getDocs(emailQuery);
-
-      if (!emailSnapshot.empty) {
-        alert("That email is already in use. Please choose another.");
-        return;
-      }
-
-    //Account Creation
-      const user = await createUserWithEmailAndPassword(auth, email, password); // take email and password and push to firebase
-      const userCredential = user.user
-      const userRef = doc(db, 'users', userCredential.uid)
-      const userSnap = await getDoc(userRef)
-
-      if (!userSnap.exists()) {
-        await setDoc(userRef, {
-          uid: userCredential.uid,
-          firstName,
-          lastName,
-          userName,
-          email: userCredential.email,
-          createdAt: new Date().toISOString(),
-          isAdmin: null,
-          correctPredictions: 0,
-          gamesPlayed: 0,
-          totalPoints: 0,
-          totalPredictions: 0
-        });
-      }
-
-      router.replace("/selectMode")
-
+      await emailSignUp(email, password, firstName, lastName, userName);
+      router.replace("/selectMode");
     } catch (error: any) {
       console.log(error);
       alert("Sign up failed: " + error.message);
@@ -165,7 +89,7 @@ const index = () => {
               autoCapitalize="none"
               returnKeyType="done"
             />
-            <TouchableOpacity style={styles.button} onPress={emailSignUp} activeOpacity={0.8}>
+            <TouchableOpacity style={styles.button} onPress={handleSignUp} activeOpacity={0.8}>
               <Text style={styles.text}>Create Account</Text>
             </TouchableOpacity>
           </ScrollView>

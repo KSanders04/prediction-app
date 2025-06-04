@@ -1,9 +1,8 @@
 import { Text, StyleSheet, TextInput, TouchableOpacity, SafeAreaView, View, KeyboardAvoidingView, Platform, ScrollView, TouchableWithoutFeedback, Keyboard } from "react-native";
 import React, { useState } from "react";
-import { auth, db } from "../firebaseConfig";
-import { signInWithEmailAndPassword } from "firebase/auth";
+import { emailSignIn } from "@/components/firebaseFunctions";
 import { router } from "expo-router";
-import { doc, setDoc, getDoc } from 'firebase/firestore';
+
 
 const index = () => {
     // State for email and password input fields
@@ -11,27 +10,10 @@ const index = () => {
   const [password, setPassword] = useState("");
 
   // Handles user sign in with email and password
-  const emailSignIn = async () => {
+  const handleSignIn = async () => {
     try {
-      const user = await signInWithEmailAndPassword(auth, email, password);
+      const user = await emailSignIn(email, password);
       if (user) router.replace("/selectMode");
-      const userCredential = user.user
-      const userRef = doc(db, 'users', userCredential.uid)
-      const userSnap = await getDoc(userRef)
-
-      // If user doc doesn't exist, create it with default values
-      if (!userSnap.exists()) {
-        await setDoc(userRef, {
-          uid: userCredential.uid,
-          email: userCredential.email,
-          createdAt: new Date().toISOString(),
-          isGamemaster: null,
-          correctPredictions: 0,
-          gamesPlayed: 0,
-          totalPoints: 0,
-          totalPredictions: 0
-        })
-      }
     } catch (error: any) {
       console.log(error);
       alert("Sign in failed: Wrong email or password");
@@ -79,7 +61,7 @@ const index = () => {
               autoCapitalize="none"
               returnKeyType="done"
             />
-            <TouchableOpacity style={styles.button} onPress={emailSignIn} activeOpacity={0.8}>
+            <TouchableOpacity style={styles.button} onPress={handleSignIn} activeOpacity={0.8}>
               <Text style={styles.text}>Sign In</Text>
             </TouchableOpacity>
 
