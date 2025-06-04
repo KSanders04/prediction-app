@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, Alert, StyleSheet } from 'react-native';
-import { auth } from '../firebaseConfig';
-import { reauthenticateWithCredential, EmailAuthProvider, updatePassword } from "firebase/auth";
 import { useNavigation } from '@react-navigation/native';
+import { changePassword } from '../components/firebaseFunctions';
 
 export default function ChangePasswordPage() {
   const navigation = useNavigation();
@@ -32,16 +31,7 @@ export default function ChangePasswordPage() {
     }
     try {
       setLoading(true);
-      const user = auth.currentUser;
-      if (!user || !user.email) {
-        Alert.alert('Error', 'No authenticated user.');
-        setLoading(false);
-        return;
-      }
-      const credential = EmailAuthProvider.credential(user.email, currentPassword);
-      await reauthenticateWithCredential(user, credential);
-      await updatePassword(user, newPassword);
-
+      await changePassword(currentPassword, newPassword);
       Alert.alert('Success', 'Password updated!');
       resetFields();
       navigation.goBack();

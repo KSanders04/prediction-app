@@ -11,7 +11,7 @@ import {
   fetchUserData,
   uploadProfileImage,
   updateUsername,
-  changeUserPassword,
+  changePassword,
   getCurrentUser,
   getCurrentUserRank,
   getRankSuffix,
@@ -137,7 +137,7 @@ export default function Profile() {
         Alert.alert('Error', 'No authenticated user.');
         return;
       }
-      await changeUserPassword(user, currentPassword, newPassword);
+      await changePassword(currentPassword, newPassword);
       Alert.alert('Success', 'Password updated!');
       setChangingPassword(false);
       setCurrentPassword('');

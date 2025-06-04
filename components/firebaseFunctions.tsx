@@ -1,5 +1,12 @@
 import { auth, db, storage } from "../firebaseConfig";
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword, getAuth, reauthenticateWithCredential, EmailAuthProvider, updatePassword} from "firebase/auth";
+import { 
+  signInWithEmailAndPassword, 
+  createUserWithEmailAndPassword, 
+  getAuth, 
+  reauthenticateWithCredential, 
+  EmailAuthProvider, 
+  updatePassword,
+  } from "firebase/auth";
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { doc, setDoc, getDoc, query, collection, where, getDocs, updateDoc } from "firebase/firestore";
 
@@ -123,13 +130,6 @@ export const updateUsername = async (uid: string, newUsername: string) => {
   await updateDoc(doc(db, 'users', uid), { userName: newUsername });
 };
 
-// Change password
-export const changeUserPassword = async (user: any, currentPassword: string, newPassword: string) => {
-  const credential = EmailAuthProvider.credential(user.email, currentPassword);
-  await reauthenticateWithCredential(user, credential);
-  await updatePassword(user, newPassword);
-};
-
 // Get current user rank (stub, replace with real logic if needed)
 export const getCurrentUserRank = () => 1;
 
@@ -153,4 +153,19 @@ export const formatLastPlayed = (timestamp: any) => {
   if (!timestamp) return 'Never';
   const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
   return date.toLocaleDateString();
+};
+
+{/*---- CHANGE PASSWORD FIREBASE/LOGIC ----*/}
+// Change password logic for use in changePasswordPage
+export const changePassword = async (
+  currentPassword: string,
+  newPassword: string
+) => {
+  const user = auth.currentUser;
+  if (!user || !user.email) {
+    throw new Error('No authenticated user.');
+  }
+  const credential = EmailAuthProvider.credential(user.email, currentPassword);
+  await reauthenticateWithCredential(user, credential);
+  await updatePassword(user, newPassword);
 };
