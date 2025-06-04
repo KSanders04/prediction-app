@@ -1,5 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, View, Text, Image, TouchableOpacity, ActivityIndicator, Alert, ScrollView, TextInput } from 'react-native';
+import {
+  StyleSheet, View, Text, Image, TouchableOpacity, ActivityIndicator, Alert,
+  ScrollView, TextInput
+} from 'react-native';
 import { auth, db, storage } from '../../firebaseConfig';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
@@ -9,6 +12,9 @@ import { ProfileStats } from '../../components/profileStats';
 import { reauthenticateWithCredential, EmailAuthProvider, updatePassword } from "firebase/auth";
 import { useNavigation } from '@react-navigation/native';
 
+type Navigation = {
+  navigate: (screen: string) => void;
+};
 
 export default function Profile() {
   const navigation = useNavigation<Navigation>();
@@ -49,14 +55,14 @@ export default function Profile() {
           totalPredictions: data.totalPredictions || 0,
           gamesPlayed: data.gamesPlayed || 0,
           lastPlayed: data.lastPlayed || null,
-          groups: data.groups || [], // Ensure groups is an array
+          groups: data.groups || [],
         });
       }
     };
     fetchUserData();
   }, []);
 
-  // Example helper functions (replace with your actual logic if needed)
+  // Helper functions
   const getCurrentUserRank = () => 1; // Replace with real rank logic
   const getRankSuffix = (rank: number) => {
     if (rank % 100 >= 11 && rank % 100 <= 13) return 'th';
@@ -75,22 +81,19 @@ export default function Profile() {
     return date.toLocaleDateString();
   };
 
+  // Image picker and upload
   const pickImageAndUpload = async () => {
-    // Ask for permission
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
       Alert.alert("Permission required", "You need to give permission to access photos.");
       return;
     }
-
-    // Launch image picker
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
       aspect: [1, 1],
       quality: 0.7,
     });
-
     if (!result.canceled) {
       const imageUri = result.assets[0].uri;
       await uploadImage(imageUri);
@@ -123,7 +126,7 @@ export default function Profile() {
     }
   };
 
-  // Function to handle username update
+  // Username update
   const handleUsernameUpdate = async () => {
     if (!newUsername.trim()) {
       Alert.alert('Invalid Username', 'Username cannot be empty.');
@@ -142,6 +145,7 @@ export default function Profile() {
     }
   };
 
+  // Password change
   const handleChangePassword = async () => {
     if (!currentPassword || !newPassword || !confirmPassword) {
       Alert.alert('Error', 'Please fill in all fields.');
@@ -161,11 +165,8 @@ export default function Profile() {
         Alert.alert('Error', 'No authenticated user.');
         return;
       }
-      // Re-authenticate
       const credential = EmailAuthProvider.credential(user.email, currentPassword);
       await reauthenticateWithCredential(user, credential);
-
-      // Update password
       await updatePassword(user, newPassword);
 
       Alert.alert('Success', 'Password updated!');
@@ -182,7 +183,7 @@ export default function Profile() {
   };
 
   return (
-    <ScrollView 
+    <ScrollView
       style={styles.container}
       contentContainerStyle={{ alignItems: 'center', justifyContent: 'flex-start' }}
     >
@@ -190,6 +191,7 @@ export default function Profile() {
         <ActivityIndicator size="large" color="#3498db" />
       ) : (
         <>
+          {/* Profile Picture */}
           <TouchableOpacity onPress={pickImageAndUpload}>
             <Image
               source={
@@ -201,10 +203,12 @@ export default function Profile() {
             />
           </TouchableOpacity>
 
+          {/* Name */}
           <View style={{ alignItems: 'flex-start', marginBottom: -10 }}>
             <Text style={styles.name}>{userData.firstName} {userData.lastName}</Text>
           </View>
 
+          {/* Edit Username & Change Password */}
           <View style={[styles.statsContainer, { marginTop: 35, marginBottom: -10 }]}>
             <TouchableOpacity
               style={styles.editUsernameButton}
@@ -222,10 +226,27 @@ export default function Profile() {
               <Text style={styles.editUsernameButtonText}>Change Password</Text>
             </TouchableOpacity>
           </View>
-          {/* Change Password Button */}
-          
 
-          {/* Change Password Modal/Section */}
+          {/* Edit Username Modal */}
+          {editingUsername && (
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 20, marginBottom: -20 }}>
+              <TextInput
+                style={styles.usernameInput}
+                value={newUsername}
+                onChangeText={setNewUsername}
+                placeholder="Enter new username"
+                autoFocus
+              />
+              <TouchableOpacity style={styles.saveButton} onPress={handleUsernameUpdate}>
+                <Text style={styles.saveButtonText}>Save</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.cancelButton} onPress={() => setEditingUsername(false)}>
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {/* Change Password Modal */}
           {changingPassword && (
             <View style={{ flexDirection: 'column', alignItems: 'center', marginTop: 20 }}>
               <TextInput
@@ -271,39 +292,23 @@ export default function Profile() {
               </View>
             </View>
           )}
-          {}
-          {editingUsername && (
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 20, marginBottom: -20 }}>
-              <TextInput
-                style={styles.usernameInput}
-                value={newUsername}
-                onChangeText={setNewUsername}
-                placeholder="Enter new username"
-                autoFocus
-              />
-              <TouchableOpacity style={styles.saveButton} onPress={handleUsernameUpdate}>
-                <Text style={styles.saveButtonText}>Save</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.cancelButton} onPress={() => setEditingUsername(false)}>
-                <Text style={styles.cancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
-            </View>
-          )}
 
-            <View style={{ flexDirection: 'row', justifyContent: 'center', marginTop: 20, marginBottom: -10 }}>
+          {/* Friends & Groups Stats */}
+          <View style={{ flexDirection: 'row', justifyContent: 'center', marginTop: 20, marginBottom: -10 }}>
             <View style={styles.statBox}>
               <Text style={styles.statNumber}>0</Text>
               <Text style={styles.statLabel}>Friends</Text>
             </View>
             <View style={styles.statBox}>
               <Text style={styles.statNumber}>
-              {userData.groups ? userData.groups.length : 0}
+                {userData.groups ? userData.groups.length : 0}
               </Text>
               <Text style={styles.statLabel}>Groups</Text>
             </View>
-            </View>
+          </View>
 
-            <View style={{ marginTop: 10, width: '100%' }}>
+          {/* Profile Stats */}
+          <View style={{ marginTop: 10, width: '100%' }}>
             <ProfileStats
               currentUser={userData}
               authUser={authUser}
@@ -312,16 +317,13 @@ export default function Profile() {
               getAccuracy={getAccuracy}
               formatLastPlayed={formatLastPlayed}
             />
-            </View>
+          </View>
           <SignOut />
         </>
       )}
     </ScrollView>
   );
 }
-type Navigation = {
-  navigate: (screen: string) => void;
-};
 
 Profile.navigationOptions = {
   headerShown: false,

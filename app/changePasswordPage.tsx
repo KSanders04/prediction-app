@@ -9,6 +9,13 @@ export default function ChangePasswordPage() {
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const resetFields = () => {
+    setCurrentPassword('');
+    setNewPassword('');
+    setConfirmPassword('');
+  };
 
   const handleChangePassword = async () => {
     if (!currentPassword || !newPassword || !confirmPassword) {
@@ -24,9 +31,11 @@ export default function ChangePasswordPage() {
       return;
     }
     try {
+      setLoading(true);
       const user = auth.currentUser;
       if (!user || !user.email) {
         Alert.alert('Error', 'No authenticated user.');
+        setLoading(false);
         return;
       }
       const credential = EmailAuthProvider.credential(user.email, currentPassword);
@@ -34,12 +43,15 @@ export default function ChangePasswordPage() {
       await updatePassword(user, newPassword);
 
       Alert.alert('Success', 'Password updated!');
+      resetFields();
       navigation.goBack();
     } catch (error: any) {
       let msg = 'Could not change password.';
       if (error.code === 'auth/wrong-password') msg = 'Current password is incorrect.';
       if (error.code === 'auth/weak-password') msg = 'Password must be at least 6 characters.';
       Alert.alert('Error', msg);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -54,6 +66,7 @@ export default function ChangePasswordPage() {
         placeholderTextColor="#555"
         secureTextEntry
         autoFocus
+        editable={!loading}
       />
       <TextInput
         style={styles.input}
@@ -62,6 +75,7 @@ export default function ChangePasswordPage() {
         placeholder="New Password"
         placeholderTextColor="#555"
         secureTextEntry
+        editable={!loading}
       />
       <TextInput
         style={styles.input}
@@ -70,14 +84,23 @@ export default function ChangePasswordPage() {
         placeholder="Confirm New Password"
         placeholderTextColor="#555"
         secureTextEntry
+        editable={!loading}
       />
-      <View style={{ flexDirection: 'row', marginTop: 20 }}>
-        <TouchableOpacity style={styles.saveButton} onPress={handleChangePassword}>
-          <Text style={styles.saveButtonText}>Save</Text>
+      <View style={styles.buttonRow}>
+        <TouchableOpacity
+          style={[styles.saveButton, loading && styles.disabledButton]}
+          onPress={handleChangePassword}
+          disabled={loading}
+        >
+          <Text style={styles.saveButtonText}>{loading ? 'Saving...' : 'Save'}</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.cancelButton}
-          onPress={() => navigation.goBack()}
+          onPress={() => {
+            resetFields();
+            navigation.goBack();
+          }}
+          disabled={loading}
         >
           <Text style={styles.cancelButtonText}>Cancel</Text>
         </TouchableOpacity>
@@ -112,6 +135,10 @@ const styles = StyleSheet.create({
     color: 'black',
     width: 260,
   },
+  buttonRow: {
+    flexDirection: 'row',
+    marginTop: 20,
+  },
   saveButton: {
     backgroundColor: '#3498db',
     paddingHorizontal: 18,
@@ -134,5 +161,8 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: '600',
     fontSize: 16,
+  },
+  disabledButton: {
+    opacity: 0.6,
   },
 });
