@@ -1,4 +1,4 @@
-import {Text,StyleSheet,TextInput,TouchableOpacity,SafeAreaView,} from "react-native";
+import {Text,StyleSheet,TextInput,TouchableOpacity,SafeAreaView, View,} from "react-native";
 import React, { useState, useEffect } from "react";
 import { auth, db } from "../firebaseConfig";
 import {createUserWithEmailAndPassword,signInWithEmailAndPassword} from "firebase/auth";
@@ -58,9 +58,13 @@ const index = () => {
       <TouchableOpacity style={styles.button} onPress={emailSignIn}>
         <Text style={styles.text}>Login</Text>
       </TouchableOpacity>
-      <TouchableOpacity style={styles.button} onPress={() => router.push("/createAccount")}>
-        <Text style={styles.text}>Create Account</Text>
-      </TouchableOpacity>
+
+      <View style={styles.createAccContainer}>
+        <Text style={styles.createAccText}>Don't have an account?</Text>
+        <TouchableOpacity onPress={() => router.push("/createAccount")}>
+          <Text style={styles.createAccButtonText}> Create Account</Text>
+        </TouchableOpacity>
+      </View>
     </SafeAreaView>
   );
 };
@@ -111,9 +115,37 @@ const styles = StyleSheet.create({
     shadowRadius: 5,
     elevation: 5,
   },
+  createAccButton: {
+    width: "90%",
+    marginVertical: 15,
+    padding: 20,
+    borderRadius: 15,
+    alignItems: "center",
+    justifyContent: "center",
+    shadowRadius: 5,
+    elevation: 5,
+  },
   text: {
     color: "#FFFFFF",
     fontSize: 18,
     fontWeight: "600",
+  },
+createAccContainer: {
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    marginTop: 10,
+    marginBottom: 10,
+  },
+  createAccText: {
+    color: "#34495e",
+    fontSize: 16,
+  },
+  createAccButtonText: {
+    color: "#5C6BC0",
+    fontSize: 16,
+    fontWeight: "700",
+    marginLeft: 4,
+    textDecorationLine: "underline",
   },
 });
