@@ -1,23 +1,25 @@
-import {Text,StyleSheet,TextInput,TouchableOpacity,SafeAreaView, View, KeyboardAvoidingView, Platform} from "react-native";
-import React, { useState, useEffect } from "react";
+import { Text, StyleSheet, TextInput, TouchableOpacity, SafeAreaView, View, KeyboardAvoidingView, Platform, ScrollView, TouchableWithoutFeedback, Keyboard } from "react-native";
+import React, { useState } from "react";
 import { auth, db } from "../firebaseConfig";
-import {createUserWithEmailAndPassword,signInWithEmailAndPassword} from "firebase/auth";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import { signInWithEmailAndPassword } from "firebase/auth";
 import { router } from "expo-router";
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 
 const index = () => {
-  const [email, setEmail] = useState(""); // set up states for the email and password originally just empty strings
+    // State for email and password input fields
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
+  // Handles user sign in with email and password
   const emailSignIn = async () => {
     try {
-      const user = await signInWithEmailAndPassword(auth, email, password); // take email and password and push to firebase
-      if (user) router.replace("/selectMode"); // if user exists send them to the next page
+      const user = await signInWithEmailAndPassword(auth, email, password);
+      if (user) router.replace("/selectMode");
       const userCredential = user.user
       const userRef = doc(db, 'users', userCredential.uid)
       const userSnap = await getDoc(userRef)
 
+      // If user doc doesn't exist, create it with default values
       if (!userSnap.exists()) {
         await setDoc(userRef, {
           uid: userCredential.uid,
@@ -32,44 +34,65 @@ const index = () => {
       }
     } catch (error: any) {
       console.log(error);
-      alert("Sign in failed: Wrong email or password"); // if there is an error, log it and alert the user
+      alert("Sign in failed: Wrong email or password");
     }
   };
 
   // Sign in with google import did not work on expo go, needs to be within use of expo dev client
   return (
-    <KeyboardAvoidingView style={{ flex: 1 }}
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-    >
-    <SafeAreaView style={styles.container}>
-      <Text style={styles.title}>Sign In</Text>
-      <TextInput
-        style={styles.textInput}
-        placeholder="Email"
-        value={email}
-        onChangeText={setEmail}
-        placeholderTextColor="#3C4858"
-      />
-      <TextInput
-        style={styles.textInput}
-        placeholder="Password"
-        value={password}
-        onChangeText={setPassword}
-        secureTextEntry
-        placeholderTextColor="#3C4858"
-      />
-      <TouchableOpacity style={styles.button} onPress={emailSignIn}>
-        <Text style={styles.text}>Sign In</Text>
-      </TouchableOpacity>
+    <SafeAreaView style={{ flex: 1, backgroundColor: "#FAFAFA" }}>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
+      >
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+          <ScrollView
+            style={styles.container}
+            contentContainerStyle={{
+              alignItems: "center",
+              justifyContent: "center",
+              flexGrow: 1,
+              paddingBottom: 40,
+            }}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
+            <Text style={styles.title}>Sign In</Text>
+            <TextInput
+              style={styles.textInput}
+              placeholder="Email"
+              value={email}
+              onChangeText={setEmail}
+              placeholderTextColor="#3C4858"
+              autoCapitalize="none"
+              keyboardType="email-address"
+              returnKeyType="next"
+            />
+            <TextInput
+              style={styles.textInput}
+              placeholder="Password"
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry
+              placeholderTextColor="#3C4858"
+              autoCapitalize="none"
+              returnKeyType="done"
+            />
+            <TouchableOpacity style={styles.button} onPress={emailSignIn} activeOpacity={0.8}>
+              <Text style={styles.text}>Sign In</Text>
+            </TouchableOpacity>
 
-      <View style={styles.createAccContainer}>
-        <Text style={styles.createAccText}>Don't have an account?</Text>
-        <TouchableOpacity onPress={() => router.push("/createAccount")}>
-          <Text style={styles.createAccButtonText}> Create Account</Text>
-        </TouchableOpacity>
-      </View>
+            <View style={styles.createAccContainer}>
+              <Text style={styles.createAccText}>Don't have an account?</Text>
+              <TouchableOpacity onPress={() => router.push("/createAccount")}>
+                <Text style={styles.createAccButtonText}> Create Account</Text>
+              </TouchableOpacity>
+            </View>
+          </ScrollView>
+        </TouchableWithoutFeedback>
+      </KeyboardAvoidingView>
     </SafeAreaView>
-    </KeyboardAvoidingView>
   );
 };
 
@@ -78,8 +101,6 @@ export default index;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
     backgroundColor: "#FAFAFA",
   },
   title: {
