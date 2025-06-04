@@ -1,5 +1,5 @@
 import { auth, db } from "../firebaseConfig";
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword} from "firebase/auth";
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword, getAuth} from "firebase/auth";
 import { doc, setDoc, getDoc, query, collection, where, getDocs } from "firebase/firestore";
 
 {/*---- LOGIN FIREBASE/LOGIC ----*/}
@@ -79,4 +79,16 @@ export const emailSignUp = async (
   }
 
   return user;
+};
+
+{/*---- SIGN OUT FIREBASE/LOGIC ----*/}
+// Handles user sign out
+export const signOutUser = async () => {
+  await auth.signOut();
+};
+// Listen for auth state changes and redirect if not logged in
+export const listenForSignOut = (redirect: () => void) => {
+  getAuth().onAuthStateChanged((user) => {
+    if (!user) redirect();
+  });
 };

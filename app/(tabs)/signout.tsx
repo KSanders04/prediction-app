@@ -1,12 +1,10 @@
-import { StyleSheet, TouchableOpacity, Text, View, Alert } from 'react-native';
-import { auth } from '../../firebaseConfig';
-import { getAuth } from 'firebase/auth';
+import { StyleSheet, TouchableOpacity, Text, Alert } from 'react-native';
 import { router } from 'expo-router';
+import { signOutUser, listenForSignOut } from '@/components/firebaseFunctions';
 
 export default function TabOneScreen() {
-  getAuth().onAuthStateChanged((user) => {
-    if (!user) router.replace('/'); // if user is not logged in return them to the login page
-  });
+  // Redirect to login if not authenticated
+  listenForSignOut(() => router.replace('/'));
 
   const handleSignOut = async () => {
     Alert.alert(
@@ -15,7 +13,7 @@ export default function TabOneScreen() {
       [
         { text: "Cancel", style: "cancel" },
         { text: "Sign Out", style: "destructive", onPress: async () => {
-            await auth.signOut();
+            await signOutUser();
             router.replace('/');
           }
         }
