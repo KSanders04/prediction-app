@@ -1,6 +1,7 @@
-import { auth, db } from "../firebaseConfig";
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword, getAuth} from "firebase/auth";
-import { doc, setDoc, getDoc, query, collection, where, getDocs } from "firebase/firestore";
+import { auth, db, storage } from "../firebaseConfig";
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword, getAuth, reauthenticateWithCredential, EmailAuthProvider, updatePassword} from "firebase/auth";
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { doc, setDoc, getDoc, query, collection, where, getDocs, updateDoc } from "firebase/firestore";
 
 {/*---- LOGIN FIREBASE/LOGIC ----*/}
 // Handles user sign in with email and password
@@ -91,4 +92,65 @@ export const listenForSignOut = (redirect: () => void) => {
   getAuth().onAuthStateChanged((user) => {
     if (!user) redirect();
   });
+};
+
+{/*---- PROFILE FIREBASE/LOGIC ----*/}
+// Get current user
+export const getCurrentUser = () => {
+  return auth.currentUser;
+};
+
+// Fetch user data
+export const fetchUserData = async (uid: string) => {
+  const docRef = doc(db, 'users', uid);
+  const docSnap = await getDoc(docRef);
+  return docSnap.exists() ? docSnap.data() : null;
+};
+
+// Upload profile image and update Firestore
+export const uploadProfileImage = async (uid: string, uri: string) => {
+  const response = await fetch(uri);
+  const blob = await response.blob();
+  const storageRef = ref(storage, `profilePics/${uid}.jpg`);
+  await uploadBytes(storageRef, blob);
+  const downloadURL = await getDownloadURL(storageRef);
+  await updateDoc(doc(db, 'users', uid), { profilePic: downloadURL });
+  return downloadURL;
+};
+
+// Update username
+export const updateUsername = async (uid: string, newUsername: string) => {
+  await updateDoc(doc(db, 'users', uid), { userName: newUsername });
+};
+
+// Change password
+export const changeUserPassword = async (user: any, currentPassword: string, newPassword: string) => {
+  const credential = EmailAuthProvider.credential(user.email, currentPassword);
+  await reauthenticateWithCredential(user, credential);
+  await updatePassword(user, newPassword);
+};
+
+// Get current user rank (stub, replace with real logic if needed)
+export const getCurrentUserRank = () => 1;
+
+// Get rank suffix
+export const getRankSuffix = (rank: number) => {
+  if (rank % 100 >= 11 && rank % 100 <= 13) return 'th';
+  switch (rank % 10) {
+    case 1: return 'st';
+    case 2: return 'nd';
+    case 3: return 'rd';
+    default: return 'th';
+  }
+};
+
+// Calculate accuracy percentage
+export const getAccuracy = (correct: number, total: number) =>
+  total > 0 ? Math.round((correct / total) * 100) : 0;
+
+// Format last played date
+export const formatLastPlayed = (timestamp: any) => {
+  if (!timestamp) return 'Never';
+  const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+  return date.toLocaleDateString();
 };
