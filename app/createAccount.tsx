@@ -1,4 +1,4 @@
-import {Text,StyleSheet,TextInput,TouchableOpacity,SafeAreaView, KeyboardAvoidingView, Platform} from "react-native";
+import { Text, StyleSheet, TextInput, TouchableOpacity, SafeAreaView, KeyboardAvoidingView, Platform, ScrollView, TouchableWithoutFeedback, Keyboard } from "react-native";
 import React, { useState, useEffect } from "react";
 import { auth, db } from "../firebaseConfig";
 import {createUserWithEmailAndPassword,signInWithEmailAndPassword} from "firebase/auth";
@@ -99,54 +99,79 @@ const index = () => {
 
   // Sign in with google import did not work on expo go, needs to be within use of expo dev client
   return (
-    <KeyboardAvoidingView style={{ flex: 1 }}
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-    >
-      <SafeAreaView style={styles.container}>
-        <Text style={styles.title}>Create An Account</Text>
-          <View style={styles.nameContainer}>
-            <TextInput
+    <SafeAreaView style={{ flex: 1, backgroundColor: "#FAFAFA" }}>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
+      >
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+          <ScrollView
+            style={styles.container}
+            contentContainerStyle={{
+              alignItems: "center",
+              justifyContent: "center",
+              flexGrow: 1,
+              paddingBottom: 40,
+            }}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
+            <Text style={styles.title}>Create An Account</Text>
+            <View style={styles.nameContainer}>
+              <TextInput
                 style={styles.firstNameInput}
                 placeholder="First Name"
                 value={firstName}
                 onChangeText={setFirstName}
                 placeholderTextColor="#3C4858"
-            />
-            <TextInput
+                returnKeyType="next"
+              />
+              <TextInput
                 style={styles.lastNameInput}
                 placeholder="Last Name"
                 value={lastName}
                 onChangeText={setLastName}
                 placeholderTextColor="#3C4858"
-            />
-          </View>
-          <TextInput
+                returnKeyType="next"
+              />
+            </View>
+            <TextInput
               style={styles.textInput}
               placeholder="Username"
               value={userName}
               onChangeText={setUserName}
               placeholderTextColor="#3C4858"
-          />
-          <TextInput
+              autoCapitalize="none"
+              returnKeyType="next"
+            />
+            <TextInput
               style={styles.textInput}
               placeholder="Email"
               value={email}
               onChangeText={setEmail}
               placeholderTextColor="#3C4858"
-          />
-          <TextInput
+              autoCapitalize="none"
+              keyboardType="email-address"
+              returnKeyType="next"
+            />
+            <TextInput
               style={styles.textInput}
               placeholder="Password"
               value={password}
               onChangeText={setPassword}
               secureTextEntry
               placeholderTextColor="#3C4858"
-          />
-        <TouchableOpacity style={styles.button} onPress={(emailSignUp)}>
-          <Text style={styles.text}>Create Account</Text>
-        </TouchableOpacity>
-      </SafeAreaView>
-    </KeyboardAvoidingView>
+              autoCapitalize="none"
+              returnKeyType="done"
+            />
+            <TouchableOpacity style={styles.button} onPress={emailSignUp} activeOpacity={0.8}>
+              <Text style={styles.text}>Create Account</Text>
+            </TouchableOpacity>
+          </ScrollView>
+        </TouchableWithoutFeedback>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 };
 
@@ -155,8 +180,6 @@ export default index;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
     backgroundColor: "#FAFAFA",
   },
   nameContainer: {
