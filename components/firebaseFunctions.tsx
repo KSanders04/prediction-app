@@ -6,9 +6,22 @@ import {
   reauthenticateWithCredential, 
   EmailAuthProvider, 
   updatePassword,
-  } from "firebase/auth";
+} from "firebase/auth";
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { doc, setDoc, getDoc, query, collection, where, getDocs, updateDoc } from "firebase/firestore";
+import { 
+  doc, 
+  setDoc, 
+  getDoc, 
+  query, 
+  collection, 
+  where, 
+  getDocs, 
+  updateDoc,
+  onSnapshot,
+  orderBy,
+  limit,
+  Timestamp,
+} from "firebase/firestore";
 
 {/*---- LOGIN FIREBASE/LOGIC ----*/}
 // Handles user sign in with email and password
@@ -168,4 +181,52 @@ export const changePassword = async (
   const credential = EmailAuthProvider.credential(user.email, currentPassword);
   await reauthenticateWithCredential(user, credential);
   await updatePassword(user, newPassword);
+};
+
+{/*---- ACTIVE PLAYERS FIREBASE/LOGIC ----*/}
+// Listen for active players in a game
+export const listenForActivePlayers = (
+  currentGameId: string,
+  onUpdate: (players: any[], totalViewers: number) => void,
+  onError: (error: any) => void
+) => {
+  if (!currentGameId) return () => {};
+
+  const presenceQuery = query(
+    collection(db, 'presence'),
+    where('gameId', '==', currentGameId),
+    where('status', '==', 'online'),
+    orderBy('joinedAt', 'desc'),
+    limit(50)
+  );
+
+  const unsubscribe = onSnapshot(presenceQuery, (snapshot) => {
+    const players: any[] = [];
+    let viewers = 0;
+    snapshot.forEach((doc) => {
+      const data = doc.data();
+      players.push(data);
+      viewers++;
+    });
+    onUpdate(players, viewers);
+  }, onError);
+
+  return unsubscribe;
+};
+
+// Format "time ago" for timestamps
+export const formatTimeAgo = (timestamp: Timestamp): string => {
+  try {
+    const now = new Date();
+    const time = timestamp.toDate();
+    const diffMinutes = Math.floor((now.getTime() - time.getTime()) / (1000 * 60));
+    if (diffMinutes < 1) return 'Just now';
+    if (diffMinutes < 60) return `${diffMinutes}m ago`;
+    const diffHours = Math.floor(diffMinutes / 60);
+    if (diffHours < 24) return `${diffHours}h ago`;
+    const diffDays = Math.floor(diffHours / 24);
+    return `${diffDays}d ago`;
+  } catch (error) {
+    return 'Unknown';
+  }
 };

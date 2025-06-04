@@ -1,16 +1,8 @@
 // components/ActivePlayers.tsx
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
-import { db } from '../firebaseConfig';
-import { 
-  collection, 
-  query, 
-  where, 
-  onSnapshot,
-  orderBy,
-  limit,
-  Timestamp 
-} from 'firebase/firestore';
+import { Timestamp } from 'firebase/firestore';
+import { listenForActivePlayers, formatTimeAgo } from './firebaseFunctions';
 
 interface ActivePlayer {
   userId: string;
@@ -39,59 +31,22 @@ export const ActivePlayers: React.FC<ActivePlayersProps> = ({ currentGameId }) =
       return;
     }
 
-    console.log('🔄 Setting up active players listener for game:', currentGameId);
-
-    // Query for all active users in the current game
-    const presenceQuery = query(
-      collection(db, 'presence'),
-      where('gameId', '==', currentGameId),
-      where('status', '==', 'online'),
-      orderBy('joinedAt', 'desc'),
-      limit(50)
+    setLoading(true);
+    const unsubscribe = listenForActivePlayers(
+      currentGameId,
+      (players, viewers) => {
+        setActivePlayers(players);
+        setTotalViewers(viewers);
+        setLoading(false);
+      },
+      (error) => {
+        console.error('Error listening to active players:', error);
+        setLoading(false);
+      }
     );
 
-    const unsubscribe = onSnapshot(presenceQuery, (snapshot) => {
-      const players: ActivePlayer[] = [];
-      let viewers = 0;
-      
-      snapshot.forEach((doc) => {
-        const data = doc.data() as ActivePlayer;
-        players.push(data);
-        viewers++;
-      });
-
-      setActivePlayers(players);
-      setTotalViewers(viewers);
-      setLoading(false);
-      
-      console.log('📊 Active players updated:', {
-        totalViewers: viewers,
-        activePlayers: players.filter(p => p.isPlaying).length
-      });
-    }, (error) => {
-      console.error('Error listening to active players:', error);
-      setLoading(false);
-    });
-
-    return () => unsubscribe();
+    return () => { if (unsubscribe) unsubscribe(); };
   }, [currentGameId]);
-
-  const formatTimeAgo = (timestamp: Timestamp): string => {
-    try {
-      const now = new Date();
-      const time = timestamp.toDate();
-      const diffMinutes = Math.floor((now.getTime() - time.getTime()) / (1000 * 60));
-      
-      if (diffMinutes < 1) return 'Just now';
-      if (diffMinutes < 60) return `${diffMinutes}m ago`;
-      const diffHours = Math.floor(diffMinutes / 60);
-      if (diffHours < 24) return `${diffHours}h ago`;
-      const diffDays = Math.floor(diffHours / 24);
-      return `${diffDays}d ago`;
-    } catch (error) {
-      return 'Unknown';
-    }
-  };
 
   if (loading) {
     return (
@@ -117,7 +72,7 @@ export const ActivePlayers: React.FC<ActivePlayersProps> = ({ currentGameId }) =
   return (
     <View style={styles.container}>
       <Text style={styles.title}>👥 Live Activity</Text>
-      
+
       {/* Summary Stats */}
       <View style={styles.summaryContainer}>
         <View style={styles.summaryCard}>
