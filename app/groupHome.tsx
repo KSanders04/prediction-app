@@ -26,6 +26,8 @@ import {
   orderBy,
   limit,
   Timestamp,
+  setDoc,
+  deleteDoc
 } from 'firebase/firestore';
 import YoutubePlayer from 'react-native-youtube-iframe';
 
@@ -125,6 +127,49 @@ export default function GroupHome() {
   const addUnsubscribeFunction = useCallback((unsubscribe: () => void) => {
     setUnsubscribeFunctions(prev => [...prev, unsubscribe]);
   }, []);
+
+  // Group leaderboard update function
+  const updateGroupLeaderboard = async (userId: string, isCorrect: boolean) => {
+    if (!groupDocId) return;
+    
+    try {
+      // Create or update user's group stats
+      const groupStatsRef = doc(db, 'groupStats', `${groupDocId}_${userId}`);
+      const groupStatsSnap = await getDoc(groupStatsRef);
+      
+      if (groupStatsSnap.exists()) {
+        const currentStats = groupStatsSnap.data();
+        await updateDoc(groupStatsRef, {
+          totalPredictions: currentStats.totalPredictions + 1,
+          correctPredictions: isCorrect ? currentStats.correctPredictions + 1 : currentStats.correctPredictions,
+          totalPoints: isCorrect ? currentStats.totalPoints + 10 : currentStats.totalPoints,
+          lastPlayed: Timestamp.fromDate(new Date())
+        });
+      } else {
+        // Get user info for display
+        const userRef = doc(db, 'users', userId);
+        const userSnap = await getDoc(userRef);
+        const userData = userSnap.exists() ? userSnap.data() : {};
+        
+        await setDoc(groupStatsRef, {
+          userId: userId,
+          groupId: groupDocId,
+          userName: userData.userName || userData.email || `User_${userId.slice(0, 6)}`,
+          email: userData.email || '',
+          totalPredictions: 1,
+          correctPredictions: isCorrect ? 1 : 0,
+          totalPoints: isCorrect ? 10 : 0,
+          createdAt: Timestamp.fromDate(new Date()),
+          lastPlayed: Timestamp.fromDate(new Date())
+        });
+      }
+      
+      console.log(`📊 Updated group leaderboard for user ${userId}: ${isCorrect ? '+10 points' : 'no points'}`);
+      
+    } catch (error) {
+      console.error('Error updating group leaderboard:', error);
+    }
+  };
 
   const setupGroupData = async (user: any) => {
     try {
@@ -321,6 +366,11 @@ export default function GroupHome() {
               setPredictionStatus('Predictions CLOSED');
             } else if (questionData.status === "finished") {
               setPredictionStatus('Results Available');
+              
+              // When results are available, update group leaderboard
+              if (questionData.actual_result) {
+                updateGroupLeaderboardFromResults(questionDoc.id, questionData.actual_result);
+              }
             }
             
             checkUserPrediction(questionDoc.id);
@@ -346,6 +396,57 @@ export default function GroupHome() {
       };
     }
   }, [currentGameId, playerId]);
+
+  // Update group leaderboard when question results are available
+  const updateGroupLeaderboardFromResults = async (questionId: string, correctAnswer: string) => {
+    try {
+      console.log('📊 Updating group leaderboard from results');
+      
+      const guessesQuery = query(
+        collection(db, "guesses"),
+        where("questionId", "==", questionId)
+      );
+      const snapshot = await getDocs(guessesQuery);
+      
+      const updatePromises = snapshot.docs.map(doc => {
+        const guess = doc.data();
+        const isCorrect = guess.prediction === correctAnswer;
+        return updateGroupLeaderboard(guess.playerId, isCorrect);
+      });
+      
+      await Promise.all(updatePromises);
+      console.log('✅ Group leaderboard updated from results');
+      
+    } catch (error) {
+      console.error('Error updating group leaderboard from results:', error);
+    }
+  };
+  // Reset group leaderboard when new game is selected
+  const resetGroupLeaderboard = async () => {
+    if (!groupDocId) return;
+    
+    try {
+      console.log('🔄 Resetting group leaderboard for new game');
+      
+      // Get all current group stats for this group
+      const groupStatsQuery = query(
+        collection(db, 'groupStats'),
+        where('groupId', '==', groupDocId)
+      );
+      const snapshot = await getDocs(groupStatsQuery);
+      
+      // Delete all existing group stats
+      const deletePromises = snapshot.docs.map(doc => 
+        deleteDoc(doc.ref)
+      );
+      
+      await Promise.all(deletePromises);
+      console.log(`✅ Reset complete: Deleted ${snapshot.docs.length} leaderboard entries`);
+      
+    } catch (error) {
+      console.error('Error resetting group leaderboard:', error);
+    }
+  };
 
   // Listen for guesses when question is active
   useEffect(() => {
@@ -374,6 +475,33 @@ export default function GroupHome() {
       };
     }
   }, [currentQuestionId]);
+
+  // Set up group leaderboard listener
+  useEffect(() => {
+    if (groupDocId) {
+      console.log('📡 Setting up group leaderboard listener');
+      
+      const groupStatsQuery = query(
+        collection(db, 'groupStats'),
+        where('groupId', '==', groupDocId),
+        orderBy('totalPoints', 'desc')
+      );
+      
+      const unsubscribeGroupStats = onSnapshot(groupStatsQuery, (snapshot) => {
+        const leaderboard: any[] = [];
+        snapshot.forEach((doc) => {
+          leaderboard.push({ id: doc.id, ...doc.data() });
+        });
+        
+        setGroupLeaderboard(leaderboard);
+        console.log(`📊 Group leaderboard updated: ${leaderboard.length} members`);
+      });
+      
+      addUnsubscribeFunction(unsubscribeGroupStats);
+      
+      return () => unsubscribeGroupStats();
+    }
+  }, [groupDocId]);
 
   // Check if user already made a prediction
   const checkUserPrediction = useCallback(async (questionId: string) => {
@@ -485,7 +613,7 @@ export default function GroupHome() {
     }
   }, [currentQuestionId, predictionStatus, playerId, currentUser, userPrediction]);
 
-  // Join game function
+  // Update the joinGameButton function to include reset:
   const joinGameButton = useCallback(async (gameName: string) => {
     try {
       const selectedGame = allGames.find(game => game.name === gameName);
@@ -497,6 +625,10 @@ export default function GroupHome() {
       console.log('🎮 Setting group game to:', selectedGame.name);
       
       if (groupDocId) {
+        // First, reset the group leaderboard
+        await resetGroupLeaderboard();
+        
+        // Then update the group with new game
         await updateDoc(doc(db, 'groups', groupDocId), {
           currentGameId: selectedGame.id,
           currentGameName: selectedGame.name,
@@ -505,8 +637,8 @@ export default function GroupHome() {
           updatedBy: currentUser?.email || playerId
         });
         
-        console.log('✅ Group game updated');
-        Alert.alert('Success', `Group is now playing: ${gameName}\n\nAll members will see this game!`);
+        console.log('✅ Group game updated and leaderboard reset');
+        Alert.alert('Success', `Group is now playing: ${gameName}\n\nLeaderboard has been reset to 0!\n\nAll members will see this game.`);
       } else {
         Alert.alert('Error', 'Group not found');
       }
@@ -557,33 +689,6 @@ export default function GroupHome() {
       cleanupAllListeners();
     };
   }, []);
-
-  // Fetch group leaderboard when groupMembers changes
-  useEffect(() => {
-    const fetchGroupLeaderboard = async () => {
-      if (!groupMembers || groupMembers.length === 0) {
-        setGroupLeaderboard([]);
-        return;
-      }
-      try {
-        // Fetch all user docs for group members
-        const usersRef = collection(db, "users");
-        const usersSnapshot = await getDocs(usersRef);
-        const users: any[] = [];
-        usersSnapshot.forEach((doc) => {
-          if (groupMembers.includes(doc.id)) {
-            users.push({ id: doc.id, ...doc.data() });
-          }
-        });
-        // Sort by totalPoints descending
-        users.sort((a, b) => (b.totalPoints || 0) - (a.totalPoints || 0));
-        setGroupLeaderboard(users);
-      } catch (error) {
-        console.error("Error fetching group leaderboard:", error);
-      }
-    };
-    fetchGroupLeaderboard();
-  }, [groupMembers]);
 
   // Loading state
   if (!currentUser || isGroupAdmin === null) {
@@ -700,29 +805,53 @@ export default function GroupHome() {
         <ScrollView style={styles.container}>
           <Text style={styles.title}>🏆 Group Leaderboard</Text>
           <Text style={styles.welcomeText}>Group Code: {groupCode}</Text>
+          <Text style={styles.infoText}>
+            📊 Points earned by group members (separate from global leaderboard)
+          </Text>
+          
           <View style={styles.section}>
             {groupLeaderboard.length === 0 ? (
-              <Text style={styles.noGamesText}>No group members found.</Text>
+              <Text style={styles.noGamesText}>
+                No predictions made yet. Start playing to build the leaderboard!
+              </Text>
             ) : (
               groupLeaderboard.map((user, idx) => (
                 <View
                   key={user.id}
                   style={[
                     styles.leaderboardItem,
-                    idx === 0 && { backgroundColor: '#fff8e1', borderLeftColor: '#ffc107' }
+                    idx === 0 && { backgroundColor: '#fff8e1', borderLeftColor: '#ffc107' },
+                    user.userId === playerId && { backgroundColor: '#e3f2fd', borderLeftColor: '#2196f3' }
                   ]}
                 >
-                  <Text style={{ fontWeight: 'bold', fontSize: 18, width: 30 }}>{idx + 1}</Text>
+                  <Text style={{ fontWeight: 'bold', fontSize: 18, width: 30 }}>
+                    {idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : idx + 1}
+                  </Text>
                   <View style={{ flex: 1 }}>
                     <Text style={{ fontWeight: 'bold', color: '#2c3e50' }}>
-                      {user.userName || user.email || `User_${user.id.slice(0, 6)}`}
+                      {user.userId === playerId ? '👤 You' : user.userName}
                     </Text>
                     <Text style={{ color: '#7f8c8d', fontSize: 12 }}>
-                      {user.totalPoints || 0} pts • {user.gamesPlayed || 0} games
+                      {user.totalPoints} pts • {user.correctPredictions}/{user.totalPredictions} correct 
+                      • {user.totalPredictions > 0 ? Math.round((user.correctPredictions / user.totalPredictions) * 100) : 0}% accuracy
                     </Text>
                   </View>
+                  {idx === 0 && <Text style={{ fontSize: 20 }}>👑</Text>}
                 </View>
               ))
+            )}
+          </View>
+          
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>📈 Group Activity</Text>
+            <Text style={styles.infoText}>
+              Total Group Predictions: {groupLeaderboard.reduce((sum, user) => sum + (user.totalPredictions || 0), 0)}
+            </Text>
+            {groupLeaderboard.length > 0 && (
+              <Text style={styles.infoText}>
+                Top Performer: {groupLeaderboard[0]?.userName || 'No activity yet'} 
+                ({groupLeaderboard[0]?.totalPoints || 0} points)
+              </Text>
             )}
           </View>
         </ScrollView>
@@ -882,6 +1011,7 @@ export default function GroupHome() {
                 <Text style={styles.debugText}>User Prediction: {userPrediction}</Text>
                 <Text style={styles.debugText}>Total Games: {allGames.length}</Text>
                 <Text style={styles.debugText}>Active Listeners: {unsubscribeFunctions.length}</Text>
+                <Text style={styles.debugText}>Group Leaderboard: {groupLeaderboard.length} members</Text>
               </View>
             </>
           )}
@@ -1230,23 +1360,5 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderLeftWidth: 3,
     borderLeftColor: '#bdc3c7',
-  },
-  leaderboardRank: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#2c3e50',
-    width: 40,
-  },
-  leaderboardName: {
-    fontSize: 16,
-    color: '#34495e',
-    flex: 1,
-  },
-  leaderboardPoints: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#27ae60',
-    width: 80,
-    textAlign: 'right',
   },
 });

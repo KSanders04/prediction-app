@@ -902,90 +902,146 @@ export default function Home() {
     }
   }, [adminCurrentGameId, playerId]);
 
-  // FIXED: Set answer only for admin's game question
-  const adminSetAnswer = useCallback(async (answer: string) => {
-    if (!currentQuestionId) {
-      Alert.alert('Error', 'No question active!');
+  // In app/(tabs)/home.tsx
+// Find the adminSetAnswer function and replace it with this:
+
+const adminSetAnswer = useCallback(async (answer: string) => {
+  if (!currentQuestionId) {
+    Alert.alert('Error', 'No question active!');
+    return;
+  }
+
+  if (!adminCurrentGameId) {
+    Alert.alert('Error', 'No active game!');
+    return;
+  }
+
+  try {
+    // Verify this question belongs to the admin's game
+    const questionRef = doc(db, "questions", currentQuestionId);
+    const questionSnap = await getDoc(questionRef);
+    
+    if (!questionSnap.exists()) {
+      Alert.alert('Error', 'Question not found!');
+      return;
+    }
+    
+    const questionData = questionSnap.data();
+    if (questionData.gameId !== adminCurrentGameId || questionData.createdBy !== playerId) {
+      Alert.alert('Error', 'You can only set answers for questions in your own game!');
       return;
     }
 
-    if (!adminCurrentGameId) {
-      Alert.alert('Error', 'No active game!');
-      return;
-    }
+    await updateDoc(questionRef, {
+      actual_result: answer,
+      status: "finished"
+    });
+    
+    // ⚠️ IMPORTANT: Only update global stats for SOLO players (not group players)
+    const guessesQuery = query(
+      collection(db, "guesses"),
+      where("questionId", "==", currentQuestionId)
+    );
+    const snapshot = await getDocs(guessesQuery);
 
-    try {
-      // Verify this question belongs to the admin's game
-      const questionRef = doc(db, "questions", currentQuestionId);
-      const questionSnap = await getDoc(questionRef);
+    const updatePromises = snapshot.docs.map(async (doc) => {
+      const guess = doc.data();
+      const isCorrect = guess.prediction === answer;
       
-      if (!questionSnap.exists()) {
-        Alert.alert('Error', 'Question not found!');
-        return;
-      }
-      
-      const questionData = questionSnap.data();
-      if (questionData.gameId !== adminCurrentGameId || questionData.createdBy !== playerId) {
-        Alert.alert('Error', 'You can only set answers for questions in your own game!');
-        return;
-      }
-
-      await updateDoc(questionRef, {
-        actual_result: answer,
-        status: "finished"
-      });
-      
-      console.log(`✅ Answer set for question in game: ${adminCurrentGameId}`);
-      Alert.alert('Success', `Answer set to: ${answer}. Players in your game can now see the results!`);
-      
-    } catch (error) {
-      console.error("Error:", error);
-      Alert.alert('Error', 'Failed to set answer');
-    }
-  }, [currentQuestionId, adminCurrentGameId, playerId]);
-
-  const adminCalculateWinners = useCallback(async () => {
-    if (!currentQuestionId || correctAnswer === 'Not set') {
-      Alert.alert('Error', 'Set the correct answer first!');
-      return;
-    }
-
-    try {
-      const guessesQuery = query(
-        collection(db, "guesses"),
-        where("questionId", "==", currentQuestionId)
+      // Check if this player is currently in a group
+      const groupsRef = collection(db, 'groups');
+      const memberQuery = query(
+        groupsRef,
+        where('groupStatus', '==', 'active'),
+        where('members', 'array-contains', guess.playerId)
       );
-      const snapshot = await getDocs(guessesQuery);
+      const memberSnapshot = await getDocs(memberQuery);
+      
+      // Only update global stats if player is NOT in an active group
+      if (memberSnapshot.empty) {
+        console.log(`🌍 Updating global stats for solo player: ${guess.playerId}`);
+        return updateUserStats(guess.playerId, isCorrect, currentGameId || '');
+      } else {
+        console.log(`👥 Skipping global stats for group player: ${guess.playerId}`);
+        return Promise.resolve();
+      }
+    });
 
-      let winners = 0;
-      let total = 0;
-      const updatePromises: Promise<void>[] = [];
+    await Promise.all(updatePromises);
+    
+    console.log(`✅ Answer set for question in game: ${adminCurrentGameId}`);
+    Alert.alert('Success', `Answer set to: ${answer}. Player stats updated!`);
+    
+  } catch (error) {
+    console.error("Error:", error);
+    Alert.alert('Error', 'Failed to set answer');
+  }
+}, [currentQuestionId, adminCurrentGameId, playerId, currentGameId, updateUserStats]);
+  // In app/(tabs)/home.tsx
+// Replace the adminCalculateWinners function with this:
 
-      snapshot.forEach((doc) => {
-        const guess = doc.data();
-        total++;
-        const isCorrect = guess.prediction === correctAnswer;
-        
-        if (isCorrect) {
-          winners++;
-        }
-        
+const adminCalculateWinners = useCallback(async () => {
+  if (!currentQuestionId || correctAnswer === 'Not set') {
+    Alert.alert('Error', 'Set the correct answer first!');
+    return;
+  }
+
+  try {
+    const guessesQuery = query(
+      collection(db, "guesses"),
+      where("questionId", "==", currentQuestionId)
+    );
+    const snapshot = await getDocs(guessesQuery);
+
+    let winners = 0;
+    let total = 0;
+    let soloPlayers = 0;
+    let groupPlayers = 0;
+    const updatePromises: Promise<void>[] = [];
+
+    // Process each guess
+    for (const doc of snapshot.docs) {
+      const guess = doc.data();
+      total++;
+      const isCorrect = guess.prediction === correctAnswer;
+      
+      if (isCorrect) {
+        winners++;
+      }
+      
+      // Check if this player is currently in a group
+      const groupsRef = collection(db, 'groups');
+      const memberQuery = query(
+        groupsRef,
+        where('groupStatus', '==', 'active'),
+        where('members', 'array-contains', guess.playerId)
+      );
+      const memberSnapshot = await getDocs(memberQuery);
+      
+      // Only update global stats if player is NOT in an active group
+      if (memberSnapshot.empty) {
+        console.log(`🌍 Updating global stats for solo player: ${guess.playerId}`);
         const updatePromise = updateUserStats(guess.playerId, isCorrect, currentGameId || '');
         updatePromises.push(updatePromise);
-      });
-
-      await Promise.all(updatePromises);
-
-      Alert.alert(
-        'Results', 
-        `🏆 FINAL RESULTS 🏆\n\nCorrect Answer: ${correctAnswer}\nWinners: ${winners} out of ${total} players\n\nAccuracy: ${total > 0 ? Math.round((winners/total) * 100) : 0}%`
-      );
-      
-    } catch (error) {
-      console.error("Error:", error);
-      Alert.alert('Error', 'Failed to calculate winners');
+        soloPlayers++;
+      } else {
+        console.log(`👥 Skipping global stats for group player: ${guess.playerId}`);
+        groupPlayers++;
+      }
     }
-  }, [currentQuestionId, correctAnswer, currentGameId, updateUserStats]);
+
+    await Promise.all(updatePromises);
+
+    Alert.alert(
+      'Results', 
+      `🏆 FINAL RESULTS 🏆\n\nCorrect Answer: ${correctAnswer}\nWinners: ${winners} out of ${total} players\n\nAccuracy: ${total > 0 ? Math.round((winners/total) * 100) : 0}%\n\n📊 Stats Updated:\n• Solo players: ${soloPlayers}\n• Group players: ${groupPlayers} (global stats not affected)`
+    );
+    
+  } catch (error) {
+    console.error("Error:", error);
+    Alert.alert('Error', 'Failed to calculate winners');
+  }
+}, [currentQuestionId, correctAnswer, currentGameId, updateUserStats]);
 
   // PLAYER FUNCTIONS
   const playerMakePrediction = useCallback(async (choice: string) => {
