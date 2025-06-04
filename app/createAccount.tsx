@@ -1,4 +1,4 @@
-import {Text,StyleSheet,TextInput,TouchableOpacity,SafeAreaView,} from "react-native";
+import {Text,StyleSheet,TextInput,TouchableOpacity,SafeAreaView, KeyboardAvoidingView, Platform} from "react-native";
 import React, { useState, useEffect } from "react";
 import { auth, db } from "../firebaseConfig";
 import {createUserWithEmailAndPassword,signInWithEmailAndPassword} from "firebase/auth";
@@ -99,50 +99,54 @@ const index = () => {
 
   // Sign in with google import did not work on expo go, needs to be within use of expo dev client
   return (
-    <SafeAreaView style={styles.container}>
-      <Text style={styles.title}>Create An Account</Text>
-        <View style={styles.nameContainer}>
+    <KeyboardAvoidingView style={{ flex: 1 }}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+    >
+      <SafeAreaView style={styles.container}>
+        <Text style={styles.title}>Create An Account</Text>
+          <View style={styles.nameContainer}>
+            <TextInput
+                style={styles.firstNameInput}
+                placeholder="First Name"
+                value={firstName}
+                onChangeText={setFirstName}
+                placeholderTextColor="#3C4858"
+            />
+            <TextInput
+                style={styles.lastNameInput}
+                placeholder="Last Name"
+                value={lastName}
+                onChangeText={setLastName}
+                placeholderTextColor="#3C4858"
+            />
+          </View>
           <TextInput
-              style={styles.firstNameInput}
-              placeholder="First Name"
-              value={firstName}
-              onChangeText={setFirstName}
+              style={styles.textInput}
+              placeholder="Username"
+              value={userName}
+              onChangeText={setUserName}
               placeholderTextColor="#3C4858"
           />
           <TextInput
-              style={styles.lastNameInput}
-              placeholder="Last Name"
-              value={lastName}
-              onChangeText={setLastName}
+              style={styles.textInput}
+              placeholder="Email"
+              value={email}
+              onChangeText={setEmail}
               placeholderTextColor="#3C4858"
           />
-        </View>
-        <TextInput
-            style={styles.textInput}
-            placeholder="Username"
-            value={userName}
-            onChangeText={setUserName}
-            placeholderTextColor="#3C4858"
-        />
-        <TextInput
-            style={styles.textInput}
-            placeholder="Email"
-            value={email}
-            onChangeText={setEmail}
-            placeholderTextColor="#3C4858"
-        />
-        <TextInput
-            style={styles.textInput}
-            placeholder="Password"
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-            placeholderTextColor="#3C4858"
-        />
-      <TouchableOpacity style={styles.button} onPress={(emailSignUp)}>
-        <Text style={styles.text}>Create Account</Text>
-      </TouchableOpacity>
-    </SafeAreaView>
+          <TextInput
+              style={styles.textInput}
+              placeholder="Password"
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry
+              placeholderTextColor="#3C4858"
+          />
+        <TouchableOpacity style={styles.button} onPress={(emailSignUp)}>
+          <Text style={styles.text}>Create Account</Text>
+        </TouchableOpacity>
+      </SafeAreaView>
+    </KeyboardAvoidingView>
   );
 };
 
@@ -164,10 +168,33 @@ const styles = StyleSheet.create({
     backgroundColor: "#FAFAFA",
   },
   title: {
-    fontSize: 28,
-    fontWeight: "800",
+    fontSize: 29,
+    fontWeight: "600",
     marginBottom: 40,
     color: "#1A237E",
+    alignSelf: "center",
+    letterSpacing: 2,
+    textShadowColor: "#B0BEC5",
+    textShadowOffset: { width: 2, height: 2 },
+    textShadowRadius: 4,
+  },
+  headingTitle: {
+    fontSize: 26,
+    fontWeight: "700",
+    marginBottom: 8,
+    color: "#3949AB",
+    alignSelf: "flex-start",
+    marginLeft: "5%",
+    letterSpacing: 1,
+  },
+  subTitle: {
+    fontSize: 20,
+    fontWeight: "600",
+    marginBottom: 50,
+    color: "#5C6BC0",
+    alignSelf: "flex-start",
+    marginLeft: "5%",
+    letterSpacing: 0.5,
   },
   textInput: {
     height: 50,

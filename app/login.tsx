@@ -1,4 +1,4 @@
-import {Text,StyleSheet,TextInput,TouchableOpacity,SafeAreaView, View,} from "react-native";
+import {Text,StyleSheet,TextInput,TouchableOpacity,SafeAreaView, View, KeyboardAvoidingView, Platform} from "react-native";
 import React, { useState, useEffect } from "react";
 import { auth, db } from "../firebaseConfig";
 import {createUserWithEmailAndPassword,signInWithEmailAndPassword} from "firebase/auth";
@@ -38,8 +38,11 @@ const index = () => {
 
   // Sign in with google import did not work on expo go, needs to be within use of expo dev client
   return (
+    <KeyboardAvoidingView style={{ flex: 1 }}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+    >
     <SafeAreaView style={styles.container}>
-      <Text style={styles.title}>Login</Text>
+      <Text style={styles.title}>Sign In</Text>
       <TextInput
         style={styles.textInput}
         placeholder="Email"
@@ -56,7 +59,7 @@ const index = () => {
         placeholderTextColor="#3C4858"
       />
       <TouchableOpacity style={styles.button} onPress={emailSignIn}>
-        <Text style={styles.text}>Login</Text>
+        <Text style={styles.text}>Sign In</Text>
       </TouchableOpacity>
 
       <View style={styles.createAccContainer}>
@@ -66,6 +69,7 @@ const index = () => {
         </TouchableOpacity>
       </View>
     </SafeAreaView>
+    </KeyboardAvoidingView>
   );
 };
 
@@ -79,10 +83,15 @@ const styles = StyleSheet.create({
     backgroundColor: "#FAFAFA",
   },
   title: {
-    fontSize: 28,
-    fontWeight: "800",
+    fontSize: 29,
+    fontWeight: "600",
     marginBottom: 40,
     color: "#1A237E",
+    alignSelf: "center",
+    letterSpacing: 2,
+    textShadowColor: "#B0BEC5",
+    textShadowOffset: { width: 2, height: 2 },
+    textShadowRadius: 4,
   },
   textInput: {
     height: 50,
