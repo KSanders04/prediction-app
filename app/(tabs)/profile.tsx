@@ -1,16 +1,24 @@
+
 import React, { useState, useEffect } from 'react';
 import {
   StyleSheet, View, Text, Image, TouchableOpacity, ActivityIndicator, Alert,
   ScrollView, TextInput
 } from 'react-native';
-import { auth, db, storage } from '../../firebaseConfig';
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import * as ImagePicker from 'expo-image-picker';
 import SignOut from './signout';
 import { ProfileStats } from '../../components/profileStats';
-import { reauthenticateWithCredential, EmailAuthProvider, updatePassword } from "firebase/auth";
 import { useNavigation } from '@react-navigation/native';
+import {
+  fetchUserData,
+  uploadProfileImage,
+  updateUsername,
+  changePassword,
+  getCurrentUser,
+  getCurrentUserRank,
+  getRankSuffix,
+  getAccuracy,
+  formatLastPlayed
+} from '../../components/firebaseFunctions';
 
 type Navigation = {
   navigate: (screen: string) => void;
@@ -34,16 +42,12 @@ export default function Profile() {
   const [confirmPassword, setConfirmPassword] = useState('');
 
   useEffect(() => {
-    const fetchUserData = async () => {
-      const user = auth.currentUser;
+    const getUserData = async () => {
+      const user = await getCurrentUser();
       if (!user) return;
       setAuthUser(user);
-
-      const docRef = doc(db, 'users', user.uid);
-      const docSnap = await getDoc(docRef);
-
-      if (docSnap.exists()) {
-        const data = docSnap.data();
+      const data = await fetchUserData(user.uid);
+      if (data) {
         setUserData({
           name: data.name || `${data.firstName || ''} ${data.lastName || ''}`.trim() || `User_${user.uid.slice(0, 6)}`,
           firstName: data.firstName || '',
@@ -59,27 +63,8 @@ export default function Profile() {
         });
       }
     };
-    fetchUserData();
+    getUserData();
   }, []);
-
-  // Helper functions
-  const getCurrentUserRank = () => 1; // Replace with real rank logic
-  const getRankSuffix = (rank: number) => {
-    if (rank % 100 >= 11 && rank % 100 <= 13) return 'th';
-    switch (rank % 10) {
-      case 1: return 'st';
-      case 2: return 'nd';
-      case 3: return 'rd';
-      default: return 'th';
-    }
-  };
-  const getAccuracy = (correct: number, total: number) =>
-    total > 0 ? Math.round((correct / total) * 100) : 0;
-  const formatLastPlayed = (timestamp: any) => {
-    if (!timestamp) return 'Never';
-    const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
-    return date.toLocaleDateString();
-  };
 
   // Image picker and upload
   const pickImageAndUpload = async () => {
@@ -96,27 +81,16 @@ export default function Profile() {
     });
     if (!result.canceled) {
       const imageUri = result.assets[0].uri;
-      await uploadImage(imageUri);
+      await handleUploadImage(imageUri);
     }
   };
 
-  const uploadImage = async (uri: string) => {
+  const handleUploadImage = async (uri: string) => {
     try {
       setUploading(true);
-      const response = await fetch(uri);
-      const blob = await response.blob();
-      const user = auth.currentUser;
+      const user = await getCurrentUser();
       if (!user) return;
-
-      const storageRef = ref(storage, `profilePics/${user.uid}.jpg`);
-      await uploadBytes(storageRef, blob);
-      const downloadURL = await getDownloadURL(storageRef);
-
-      // Update Firestore
-      const userRef = doc(db, 'users', user.uid);
-      await updateDoc(userRef, { profilePic: downloadURL });
-
-      // Update local state
+      const downloadURL = await uploadProfileImage(user.uid, uri);
       setUserData((prev) => ({ ...prev, profilePic: downloadURL }));
     } catch (err) {
       console.error("Image upload failed:", err);
@@ -133,10 +107,9 @@ export default function Profile() {
       return;
     }
     try {
-      const user = auth.currentUser;
+      const user = await getCurrentUser();
       if (!user) return;
-      const userRef = doc(db, 'users', user.uid);
-      await updateDoc(userRef, { userName: newUsername.trim() });
+      await updateUsername(user.uid, newUsername.trim());
       setUserData((prev) => ({ ...prev, userName: newUsername.trim() }));
       setEditingUsername(false);
       Alert.alert('Success', 'Username updated!');
@@ -160,15 +133,12 @@ export default function Profile() {
       return;
     }
     try {
-      const user = auth.currentUser;
+      const user = await getCurrentUser();
       if (!user || !user.email) {
         Alert.alert('Error', 'No authenticated user.');
         return;
       }
-      const credential = EmailAuthProvider.credential(user.email, currentPassword);
-      await reauthenticateWithCredential(user, credential);
-      await updatePassword(user, newPassword);
-
+      await changePassword(currentPassword, newPassword);
       Alert.alert('Success', 'Password updated!');
       setChangingPassword(false);
       setCurrentPassword('');
@@ -328,6 +298,8 @@ export default function Profile() {
 Profile.navigationOptions = {
   headerShown: false,
 };
+
+// ...styles remain unchanged...
 
 const styles = StyleSheet.create({
   container: {

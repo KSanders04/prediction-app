@@ -1,12 +1,15 @@
-import { StyleSheet, TouchableOpacity, Text, View, Alert } from 'react-native';
-import { auth } from '../../firebaseConfig';
-import { getAuth } from 'firebase/auth';
+import { StyleSheet, TouchableOpacity, Text, Alert, View } from 'react-native';
 import { router } from 'expo-router';
+import { signOutUser, listenForSignOut } from '@/components/firebaseFunctions';
+import FontAwesome from '@expo/vector-icons/FontAwesome';
+import Colors from '@/constants/Colors';
+import { useColorScheme } from '@/components/useColorScheme';
+import { useClientOnlyValue } from '@/components/useClientOnlyValue';
+
 
 export default function TabOneScreen() {
-  getAuth().onAuthStateChanged((user) => {
-    if (!user) router.replace('/'); // if user is not logged in return them to the login page
-  });
+  // Redirect to login if not authenticated
+  listenForSignOut(() => router.replace('/'));
 
   const handleSignOut = async () => {
     Alert.alert(
@@ -15,7 +18,7 @@ export default function TabOneScreen() {
       [
         { text: "Cancel", style: "cancel" },
         { text: "Sign Out", style: "destructive", onPress: async () => {
-            await auth.signOut();
+            await signOutUser();
             router.replace('/');
           }
         }
@@ -25,9 +28,17 @@ export default function TabOneScreen() {
 
   return (
     <TouchableOpacity style={styles.button} onPress={handleSignOut}>
+    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+      <FontAwesome
+        name="sign-out"
+        size={25}
+        color="#FFFFFF"
+        style={{ marginRight: 8, opacity: 1 }}
+      />
       <Text style={styles.text}>Sign Out</Text>
-    </TouchableOpacity>
-  );
+    </View>
+  </TouchableOpacity>
+);
 }
 
 const styles = StyleSheet.create({
