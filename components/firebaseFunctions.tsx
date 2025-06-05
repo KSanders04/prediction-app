@@ -22,32 +22,9 @@ import {
   limit,
   Timestamp,
   addDoc,
-  increment
+  increment,
+  deleteDoc
 } from "firebase/firestore";
-
-
-//Handles if user has an account
-export const createUserDocIfNotExists = async (
-  user: any,
-  extraFields: Record<string, any> = {}
-) => {
-  const userRef = doc(db, "users", user.uid);
-  const userSnap = await getDoc(userRef);
-
-  if (!userSnap.exists()) {
-    await setDoc(userRef, {
-      uid: user.uid,
-      email: user.email,
-      createdAt: new Date().toISOString(),
-      isGamemaster: null,
-      correctPredictions: 0,
-      gamesPlayed: 0,
-      totalPoints: 0,
-      totalPredictions: 0,
-      ...extraFields,
-    });
-  }
-};
 
 {/*---- LOGIN FIREBASE/LOGIC ----*/}
 // Handles user sign in with email and password
@@ -55,7 +32,22 @@ export const emailSignIn = async (email: string, password: string) => {
   try {
     const user = await signInWithEmailAndPassword(auth, email, password);
     const userCredential = user.user;
-    await createUserDocIfNotExists(userCredential);
+    const userRef = doc(db, "users", userCredential.uid);
+    const userSnap = await getDoc(userRef);
+
+    // If user doc doesn't exist, create it with default values
+    if (!userSnap.exists()) {
+      await setDoc(userRef, {
+        uid: userCredential.uid,
+        email: userCredential.email,
+        createdAt: new Date().toISOString(),
+        isGamemaster: null,
+        correctPredictions: 0,
+        gamesPlayed: 0,
+        totalPoints: 0,
+        totalPredictions: 0,
+      });
+    }
     return user;
   } catch (error: any) {
     throw error;
@@ -91,13 +83,24 @@ export const emailSignUp = async (
   // Create account
   const user = await createUserWithEmailAndPassword(auth, email, password);
   const userCredential = user.user;
-  await createUserDocIfNotExists(userCredential, {
-    email,
-    password,
-    firstName,
-    lastName,
-    userName,
-  });
+  const userRef = doc(db, "users", userCredential.uid);
+  const userSnap = await getDoc(userRef);
+
+  if (!userSnap.exists()) {
+    await setDoc(userRef, {
+      uid: userCredential.uid,
+      firstName,
+      lastName,
+      userName,
+      email: userCredential.email,
+      createdAt: new Date().toISOString(),
+      isAdmin: null,
+      correctPredictions: 0,
+      gamesPlayed: 0,
+      totalPoints: 0,
+      totalPredictions: 0,
+    });
+  }
 
   return user;
 };
@@ -860,8 +863,282 @@ export const calculateWinners = async (questionId: string, correctAnswer: string
     throw error;
   }
 };
+// Add this to firebaseFunctions.tsx
+export const loadUserData = async (playerId: string) => {
+  if (!playerId) return null;
+  
+  try {
+    const userRef = doc(db, 'users', playerId);
+    const userSnap = await getDoc(userRef);
+    
+    if (userSnap.exists()) {
+      return userSnap.data();
+    }
+    return null;
+  } catch (error) {
+    console.error('Error loading user data:', error);
+    throw error;
+  }
+};
 
-export const testFunction = () => {
-  console.log("Test function works!");
-  return "success";
+
+export const checkUserGameMasterStatus = async (uid: string) => {
+  try {
+    const userRef = doc(db, 'users', uid);
+    const userSnap = await getDoc(userRef);
+    
+    if (userSnap.exists()) {
+      const data = userSnap.data();
+      return {
+        isGamemaster: data.isGamemaster === true,
+        userData: data
+      };
+    }
+    return { isGamemaster: false, userData: null };
+  } catch (error) {
+    console.error('Error checking gamemaster status:', error);
+    throw error;
+  }
+};
+
+/*---- GROUP FIREBASE/LOGIC (ADD THESE TO YOUR firebaseFunctions.tsx) ----*/
+
+// Group interfaces
+export interface GroupData {
+  id: string;
+  code: string;
+  groupStatus: string;
+  createdBy: string;
+  members: string[];
+  groupName: string;
+  currentGameId?: string;
+  currentGameName?: string;
+  url?: string;
+  groupAdminID: string;
+}
+
+// Check if user is group admin
+export const checkUserGroupStatus = async (userEmail: string, userId: string) => {
+  try {
+    const groupsRef = collection(db, 'groups');
+
+    // Check if user is admin
+    const adminQuery = query(
+      groupsRef,
+      where('groupStatus', '==', 'active'),
+      where('createdBy', '==', userEmail)
+    );
+    const adminSnapshot = await getDocs(adminQuery);
+
+    if (!adminSnapshot.empty) {
+      const groupDoc = adminSnapshot.docs[0];
+      const groupData = groupDoc.data();
+      
+      return {
+        isAdmin: true,
+        groupData: {
+          id: groupDoc.id,
+          ...groupData
+        } as GroupData
+      };
+    }
+
+    // Check if user is a member
+    const memberQuery = query(
+      groupsRef,
+      where('groupStatus', '==', 'active'),
+      where('members', 'array-contains', userId)
+    );
+    const memberSnapshot = await getDocs(memberQuery);
+
+    if (!memberSnapshot.empty) {
+      const groupDoc = memberSnapshot.docs[0];
+      const groupData = groupDoc.data();
+      
+      return {
+        isAdmin: false,
+        groupData: {
+          id: groupDoc.id,
+          ...groupData
+        } as GroupData
+      };
+    }
+
+    return { isAdmin: false, groupData: null };
+  } catch (error) {
+    console.error('Error checking user group status:', error);
+    throw error;
+  }
+};
+
+// Listen to group changes
+export const listenToGroupChanges = (groupDocId: string, callback: (groupData: any) => void) => {
+  const groupDocRef = doc(db, 'groups', groupDocId);
+  
+  return onSnapshot(groupDocRef, async (doc) => {
+    if (doc.exists()) {
+      const groupData = doc.data();
+      callback(groupData);
+    }
+  }, (error) => {
+    console.error('Error in group listener:', error);
+  });
+};
+
+// Set group game
+export const setGroupGame = async (groupId: string, gameId: string, gameName: string, gameUrl?: string, userEmail?: string, playerId?: string) => {
+  try {
+    await updateDoc(doc(db, 'groups', groupId), {
+      currentGameId: gameId,
+      currentGameName: gameName,
+      url: gameUrl || '',
+      lastGameUpdate: Timestamp.fromDate(new Date()),
+      updatedBy: userEmail || playerId
+    });
+  } catch (error) {
+    console.error("Error setting group game:", error);
+    throw error;
+  }
+};
+
+// Reset group leaderboard
+export const resetGroupLeaderboard = async (groupId: string) => {
+  try {
+    // Get all current group stats for this group
+    const groupStatsQuery = query(
+      collection(db, 'groupStats'),
+      where('groupId', '==', groupId)
+    );
+    const snapshot = await getDocs(groupStatsQuery);
+    
+    // Delete all existing group stats
+    const deletePromises = snapshot.docs.map(doc => 
+      deleteDoc(doc.ref)
+    );
+    
+    await Promise.all(deletePromises);
+    console.log(`Reset complete: Deleted ${snapshot.docs.length} leaderboard entries`);
+    
+    return snapshot.docs.length;
+  } catch (error) {
+    console.error('Error resetting group leaderboard:', error);
+    throw error;
+  }
+};
+
+// Update group leaderboard
+export const updateGroupLeaderboard = async (groupId: string, userId: string, isCorrect: boolean) => {
+  try {
+    // Create or update user's group stats
+    const groupStatsRef = doc(db, 'groupStats', `${groupId}_${userId}`);
+    const groupStatsSnap = await getDoc(groupStatsRef);
+    
+    if (groupStatsSnap.exists()) {
+      const currentStats = groupStatsSnap.data();
+      await updateDoc(groupStatsRef, {
+        totalPredictions: currentStats.totalPredictions + 1,
+        correctPredictions: isCorrect ? currentStats.correctPredictions + 1 : currentStats.correctPredictions,
+        totalPoints: isCorrect ? currentStats.totalPoints + 10 : currentStats.totalPoints,
+        lastPlayed: Timestamp.fromDate(new Date())
+      });
+    } else {
+      // Get user info for display
+      const userRef = doc(db, 'users', userId);
+      const userSnap = await getDoc(userRef);
+      const userData = userSnap.exists() ? userSnap.data() : {};
+      
+      await setDoc(groupStatsRef, {
+        userId: userId,
+        groupId: groupId,
+        userName: userData.userName || userData.email || `User_${userId.slice(0, 6)}`,
+        email: userData.email || '',
+        totalPredictions: 1,
+        correctPredictions: isCorrect ? 1 : 0,
+        totalPoints: isCorrect ? 10 : 0,
+        createdAt: Timestamp.fromDate(new Date()),
+        lastPlayed: Timestamp.fromDate(new Date())
+      });
+    }
+  } catch (error) {
+    console.error('Error updating group leaderboard:', error);
+    throw error;
+  }
+};
+
+// Listen to group leaderboard
+export const listenToGroupLeaderboard = (groupId: string, callback: (leaderboard: any[]) => void) => {
+  const groupStatsQuery = query(
+    collection(db, 'groupStats'),
+    where('groupId', '==', groupId),
+    orderBy('totalPoints', 'desc')
+  );
+  
+  return onSnapshot(groupStatsQuery, (snapshot) => {
+    const leaderboard: any[] = [];
+    snapshot.forEach((doc) => {
+      leaderboard.push({ id: doc.id, ...doc.data() });
+    });
+    
+    callback(leaderboard);
+  });
+};
+
+// Update group leaderboard from question results
+export const updateGroupLeaderboardFromResults = async (questionId: string, correctAnswer: string, groupId: string) => {
+  try {
+    const guessesQuery = query(
+      collection(db, "guesses"),
+      where("questionId", "==", questionId)
+    );
+    const snapshot = await getDocs(guessesQuery);
+    
+    const updatePromises = snapshot.docs.map(doc => {
+      const guess = doc.data();
+      const isCorrect = guess.prediction === correctAnswer;
+      return updateGroupLeaderboard(groupId, guess.playerId, isCorrect);
+    });
+    
+    await Promise.all(updatePromises);
+  } catch (error) {
+    console.error('Error updating group leaderboard from results:', error);
+    throw error;
+  }
+};
+
+// Make group prediction (same as regular prediction but for groups)
+export const makeGroupPrediction = async (predictionData: {
+  questionId: string;
+  playerId: string;
+  playerEmail?: string;
+  userName?: string;
+  prediction: string;
+}) => {
+  try {
+    const guessQuery = query(
+      collection(db, "guesses"),
+      where("questionId", "==", predictionData.questionId),
+      where("playerId", "==", predictionData.playerId)
+    );
+    const guessSnapshot = await getDocs(guessQuery);
+
+    if (!guessSnapshot.empty) {
+      const guessDoc = guessSnapshot.docs[0];
+      await updateDoc(doc(db, "guesses", guessDoc.id), {
+        prediction: predictionData.prediction,
+        timestamp: Timestamp.fromDate(new Date())
+      });
+    } else {
+      await addDoc(collection(db, "guesses"), {
+        prediction: predictionData.prediction,
+        questionId: predictionData.questionId,
+        playerId: predictionData.playerId,
+        playerEmail: predictionData.playerEmail || null,
+        userName: predictionData.userName || `Player_${predictionData.playerId.slice(0, 6)}`,
+        timestamp: Timestamp.fromDate(new Date())
+      });
+    }
+  } catch (error) {
+    console.error("Error making group prediction:", error);
+    throw error;
+  }
 };
