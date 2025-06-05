@@ -3,7 +3,7 @@ import { router } from 'expo-router';
 import { signOutUser, listenForSignOut } from '@/components/firebaseFunctions';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 
-export default function TabOneScreen() {
+export default function signout() {
   // Redirect to login if not authenticated
   listenForSignOut(() => router.replace('/'));
 

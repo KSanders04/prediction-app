@@ -4,7 +4,7 @@ import {
   ScrollView, TextInput
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
-import SignOut from './signout';
+import SignOut from '../../components/signout';
 import { ProfileStats } from '../../components/profileStats';
 import { useNavigation } from '@react-navigation/native';
 import { User } from '@/types'; // Import User type

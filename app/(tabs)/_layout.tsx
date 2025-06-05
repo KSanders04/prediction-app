@@ -44,7 +44,7 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="leaderboard"
+        name="two"
         options={{
           title: 'Leaderboard',
           tabBarIcon: ({ color }) => <TabBarIcon name="trophy" color={color} />,
@@ -65,27 +65,6 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="signout"
-        options={{ href: null,
-          title: 'Sign Out',
-          tabBarIcon: ({ color }) => <TabBarIcon name="sign-out" color={color} />,
-          headerRight: () => (
-            <Link href="/profile" asChild>
-              <Pressable>
-                {({ pressed }) => (
-                  <FontAwesome
-                    name="user-circle"
-                    size={25}
-                    color={Colors[colorScheme ?? 'light'].text}
-                    style={{ marginRight: 15, opacity: pressed ? 0.5 : 1 }}
-                  />
-                )}
-              </Pressable>
-            </Link>
-          ),
-        }}
-      />
-            <Tabs.Screen
         name="groupMode"
         options={{ 
           title: 'Group Mode',
