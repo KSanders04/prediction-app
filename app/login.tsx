@@ -3,7 +3,6 @@ import React, { useState } from "react";
 import { emailSignIn } from "@/components/firebaseFunctions";
 import { router } from "expo-router";
 
-
 const index = () => {
     // State for email and password input fields
   const [email, setEmail] = useState("");

@@ -1,4 +1,4 @@
-// app/(tabs)/home.tsx - SIMPLIFIED VERSION using firebaseFunctions.tsx
+// app/(tabs)/home.tsx
 
 import React, { useState, useCallback, useEffect } from 'react';
 import {

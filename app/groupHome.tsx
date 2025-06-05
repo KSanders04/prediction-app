@@ -24,8 +24,10 @@ import {
   checkUserPrediction,
   makeGroupPrediction,
   listenToGuesses,
-  GroupData,
 } from '../components/firebaseFunctions';
+
+import { GroupData } from '@/types';
+
 
 // Still need auth for user state
 import { auth } from '../firebaseConfig';
