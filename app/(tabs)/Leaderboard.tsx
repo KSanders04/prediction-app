@@ -1,33 +1,13 @@
 // app/(tabs)/two.tsx  (Leaderboard section)
-import React, { useState, useEffect } from 'react';
-import {
-  StyleSheet,
-  ScrollView,
-  View,
-  Text,
-  SafeAreaView,
-  RefreshControl,
-} from 'react-native';
-
-// Import Firebase configuration
-import { auth, db } from '../../firebaseConfig';
+import React, { useState, useEffect, useCallback } from 'react';
+import {StyleSheet,ScrollView,View,Text,SafeAreaView,RefreshControl,} from 'react-native';
 import { onAuthStateChanged } from 'firebase/auth';
-import { 
-  collection, 
-  query, 
-  orderBy,
-  limit,
-  getDocs, 
-  doc,
-  getDoc,
-  setDoc,
-  onSnapshot,
-  Timestamp
-} from 'firebase/firestore';
 import { router } from 'expo-router';
-
 import { User } from '@/types';
 import { UserStats } from '../../components/userStats';
+import {getLeaderboardUsers, getUserById, createUserIfNotExists,} from '../../components/firebaseFunctions';
+import { auth } from '../../firebaseConfig';
+import { Timestamp } from 'firebase/firestore';
 
 export default function LeaderboardScreen() {
   const [leaderboard, setLeaderboard] = useState<User[]>([]);
@@ -42,137 +22,46 @@ export default function LeaderboardScreen() {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
         setAuthUser(user);
-        setPlayerId(user.uid); // Use actual user ID
+        setPlayerId(user.uid);
       } else {
-        router.replace('/login'); // Redirect if not logged in
+        router.replace('/login');
       }
     });
     return unsubscribe;
   }, []);
 
+  // Load leaderboard and current user
   useEffect(() => {
     if (playerId) {
       loadLeaderboard();
       loadCurrentUser();
-      
-      // Set up real-time listener for leaderboard
-      const unsubscribe = setupRealtimeLeaderboard();
-      return () => unsubscribe();
     }
   }, [playerId]);
 
-  const loadLeaderboard = async () => {
+  const loadLeaderboard = useCallback(async () => {
     try {
       setLoading(true);
-      const leaderboardQuery = query(
-        collection(db, "users"),
-        orderBy("totalPoints", "desc"),
-        limit(50)
-      );
-      
-      const snapshot = await getDocs(leaderboardQuery);
-      const users: User[] = [];
-      
-      snapshot.forEach((doc) => {
-        const userData = doc.data();
-        users.push({ 
-          id: doc.id, 
-          name: userData.email || userData.name || userData.uid || `User_${doc.id.slice(0, 6)}`,
-          email: userData.email,
-          totalPoints: userData.totalPoints || 0,
-          gamesPlayed: userData.gamesPlayed || 0,
-          correctPredictions: userData.correctPredictions || 0,
-          totalPredictions: userData.totalPredictions || 0,
-          lastPlayed: userData.lastPlayed || new Date()
-        } as User);
-      });
-      
+      const users = await getLeaderboardUsers(50);
       setLeaderboard(users);
     } catch (error) {
       console.error("Error loading leaderboard:", error);
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const loadCurrentUser = async () => {
-  if (!playerId) return;
-
-  try {
-    const userRef = doc(db, "users", playerId);
-    const userSnap = await getDoc(userRef);
-
-    if (userSnap.exists()) {
-      const userData = userSnap.data();
-      setCurrentUser({ 
-        id: userSnap.id, 
-        userName: userData.userName || `User_${userSnap.id.slice(0, 6)}`,
-        name: userData.userName || userData.email || userData.name || userData.uid || `User_${userSnap.id.slice(0, 6)}`,
-        email: userData.email,
-        totalPoints: userData.totalPoints || 0,
-        gamesPlayed: userData.gamesPlayed || 0,
-        correctPredictions: userData.correctPredictions || 0,
-        totalPredictions: userData.totalPredictions || 0,
-        lastPlayed: userData.lastPlayed || new Date()
-      } as User);
-    } else {
-
-      const newUserData = {
-        email: authUser?.email,
-        name: authUser?.email || `User_${playerId.slice(0, 6)}`,
-        totalPoints: 0,
-        gamesPlayed: 0,
-        correctPredictions: 0,
-        totalPredictions: 0,
-        lastPlayed: Timestamp.fromDate(new Date()), 
-        createdAt: Timestamp.fromDate(new Date()),   
-        isGamemaster: null
-      };
-
-      await setDoc(userRef, newUserData);
-      setCurrentUser({
-        id: playerId,
-        ...newUserData
-      } as User);
-    }
-  } catch (error) {
-    console.error("Error loading current user:", error);
-  }
-};
-
-
-  const setupRealtimeLeaderboard = () => {
-    const leaderboardQuery = query(
-      collection(db, "users"),
-      orderBy("totalPoints", "desc"),
-      limit(50)
-    );
-
-    return onSnapshot(leaderboardQuery, (snapshot) => {
-      const users: User[] = [];
-      snapshot.forEach((doc) => {
-        const userData = doc.data();
-        users.push({ 
-          id: doc.id, 
-          userName: userData.userName || `User_${doc.id.slice(0, 6)}`,
-          name: userData.userName || `User_${doc.id.slice(0, 6)}`,
-          email: userData.email,
-          totalPoints: userData.totalPoints || 0,
-          gamesPlayed: userData.gamesPlayed || 0,
-          correctPredictions: userData.correctPredictions || 0,
-          totalPredictions: userData.totalPredictions || 0,
-          lastPlayed: userData.lastPlayed || new Date()
-        } as User);
-      });
-      setLeaderboard(users);
-      
-      // Update current user if they're in the leaderboard
-      const updatedCurrentUser = users.find(user => user.id === playerId);
-      if (updatedCurrentUser) {
-        setCurrentUser(updatedCurrentUser);
+  const loadCurrentUser = useCallback(async () => {
+    if (!playerId) return;
+    try {
+      let user = await getUserById(playerId);
+      if (!user && authUser) {
+        user = await createUserIfNotExists(authUser);
       }
-    });
-  };
+      setCurrentUser(user);
+    } catch (error) {
+      console.error("Error loading current user:", error);
+    }
+  }, [playerId, authUser]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -191,29 +80,23 @@ export default function LeaderboardScreen() {
   };
 
   const formatLastPlayed = (timestamp: any): string => {
-  const now = new Date();
-
-  // Convert Firestore Timestamp or string to JS Date
-  let lastPlayedDate: Date;
-
-  if (timestamp instanceof Timestamp) {
-    lastPlayedDate = timestamp.toDate();
-  } else if (timestamp instanceof Date) {
-    lastPlayedDate = timestamp;
-  } else if (typeof timestamp === 'string') {
-    lastPlayedDate = new Date(timestamp);
-  } else {
-    return 'Unknown';
-  }
-
-  const diffInMinutes = Math.floor((now.getTime() - lastPlayedDate.getTime()) / (1000 * 60));
-
-  if (diffInMinutes < 1) return 'Just now';
-  if (diffInMinutes < 60) return `${diffInMinutes}m ago`;
-  if (diffInMinutes < 1440) return `${Math.floor(diffInMinutes / 60)}h ago`;
-  return `${Math.floor(diffInMinutes / 1440)}d ago`;
-};
-
+    const now = new Date();
+    let lastPlayedDate: Date;
+    if (timestamp instanceof Timestamp) {
+      lastPlayedDate = timestamp.toDate();
+    } else if (timestamp instanceof Date) {
+      lastPlayedDate = timestamp;
+    } else if (typeof timestamp === 'string') {
+      lastPlayedDate = new Date(timestamp);
+    } else {
+      return 'Unknown';
+    }
+    const diffInMinutes = Math.floor((now.getTime() - lastPlayedDate.getTime()) / (1000 * 60));
+    if (diffInMinutes < 1) return 'Just now';
+    if (diffInMinutes < 60) return `${diffInMinutes}m ago`;
+    if (diffInMinutes < 1440) return `${Math.floor(diffInMinutes / 60)}h ago`;
+    return `${Math.floor(diffInMinutes / 1440)}d ago`;
+  };
 
   const getCurrentUserRank = (): number => {
     return leaderboard.findIndex(user => user.id === playerId) + 1;
@@ -236,7 +119,7 @@ export default function LeaderboardScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView 
+      <ScrollView
         style={styles.scrollView}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
@@ -271,10 +154,9 @@ export default function LeaderboardScreen() {
             leaderboard.map((user, index) => {
               const rank = index + 1;
               const isCurrentUser = user.id === playerId;
-              
               return (
-                <View 
-                  key={user.id} 
+                <View
+                  key={user.id}
                   style={[
                     styles.leaderboardItem,
                     isCurrentUser && styles.currentUserItem,
@@ -291,7 +173,6 @@ export default function LeaderboardScreen() {
                       {rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : rank}
                     </Text>
                   </View>
-                  
                   <View style={styles.playerInfo}>
                     <Text style={[styles.playerName, isCurrentUser && styles.currentUserName]}>
                       {isCurrentUser ? '👤 You' : user.userName || `User_${user.id.slice(0, 6)}`}
@@ -300,7 +181,6 @@ export default function LeaderboardScreen() {
                       {user.gamesPlayed} games • {getAccuracy(user.correctPredictions, user.totalPredictions)}% accuracy
                     </Text>
                   </View>
-                  
                   <View style={styles.pointsSection}>
                     <Text style={[styles.pointsText, isCurrentUser && styles.currentUserPoints]}>
                       {user.totalPoints}

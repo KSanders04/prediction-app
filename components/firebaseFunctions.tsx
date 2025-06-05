@@ -236,6 +236,113 @@ export const formatTimeAgo = (timestamp: Timestamp): string => {
   }
 };
 
+<<<<<<< HEAD
+// Fetch top N users for leaderboard
+export const getLeaderboardUsers = async (limitCount = 50) => {
+  const leaderboardQuery = query(
+    collection(db, "users"),
+    orderBy("totalPoints", "desc"),
+    limit(limitCount)
+  );
+  const snapshot = await getDocs(leaderboardQuery);
+  type LeaderboardUser = {
+    id: string;
+    userName: string;
+    name: string;
+    email: string;
+    totalPoints: number;
+    gamesPlayed: number;
+    correctPredictions: number;
+    totalPredictions: number;
+    lastPlayed: any;
+  };
+
+  const users: LeaderboardUser[] = [];
+  snapshot.forEach((docSnap) => {
+    const userData = docSnap.data();
+    users.push({
+      id: docSnap.id,
+      userName: userData.userName || `User_${docSnap.id.slice(0, 6)}`,
+      name: userData.userName || userData.email || userData.name || userData.uid || `User_${docSnap.id.slice(0, 6)}`,
+      email: userData.email,
+      totalPoints: userData.totalPoints || 0,
+      gamesPlayed: userData.gamesPlayed || 0,
+      correctPredictions: userData.correctPredictions || 0,
+      totalPredictions: userData.totalPredictions || 0,
+      lastPlayed: userData.lastPlayed || new Date()
+    });
+  });
+  return users;
+};
+
+// Fetch user by ID
+export const getUserById = async (uid: string) => {
+  const userRef = doc(db, "users", uid);
+  const userSnap = await getDoc(userRef);
+  if (userSnap.exists()) {
+    const userData = userSnap.data();
+    return {
+      id: userSnap.id,
+      userName: userData.userName || `User_${userSnap.id.slice(0, 6)}`,
+      name: userData.userName || userData.email || userData.name || userData.uid || `User_${userSnap.id.slice(0, 6)}`,
+      email: userData.email,
+      totalPoints: userData.totalPoints || 0,
+      gamesPlayed: userData.gamesPlayed || 0,
+      correctPredictions: userData.correctPredictions || 0,
+      totalPredictions: userData.totalPredictions || 0,
+      lastPlayed: userData.lastPlayed || new Date()
+    };
+  }
+  return null;
+};
+
+// Create user if not exists
+export const createUserIfNotExists = async (authUser: any) => {
+  const playerId = authUser.uid;
+  const userRef = doc(db, "users", playerId);
+  const userSnap = await getDoc(userRef);
+  if (!userSnap.exists()) {
+    // Generate a userName (try displayName, then email prefix, then fallback)
+    const userName =
+      authUser.displayName ||
+      (authUser.email ? authUser.email.split('@')[0] : null) ||
+      `User_${playerId.slice(0, 6)}`;
+
+    const newUserData = {
+      email: authUser.email,
+      name: authUser.displayName || authUser.email || `User_${playerId.slice(0, 6)}`,
+      userName, // <-- Add userName here
+      totalPoints: 0,
+      gamesPlayed: 0,
+      correctPredictions: 0,
+      totalPredictions: 0,
+      lastPlayed: Timestamp.fromDate(new Date()),
+      createdAt: Timestamp.fromDate(new Date()),
+      isGamemaster: null
+    };
+    await setDoc(userRef, newUserData);
+    return {
+      id: playerId,
+      ...newUserData
+    };
+  }
+  // If user exists, return the user object in the same shape as getUserById
+  if (userSnap.exists()) {
+    const userData = userSnap.data();
+    return {
+      id: userSnap.id,
+      userName: userData.userName || `User_${userSnap.id.slice(0, 6)}`,
+      name: userData.userName || userData.email || userData.name || userData.uid || `User_${userSnap.id.slice(0, 6)}`,
+      email: userData.email,
+      totalPoints: userData.totalPoints || 0,
+      gamesPlayed: userData.gamesPlayed || 0,
+      correctPredictions: userData.correctPredictions || 0,
+      totalPredictions: userData.totalPredictions || 0,
+      lastPlayed: userData.lastPlayed || new Date()
+    };
+  }
+  return null;
+=======
 {/*---- NEW: HOME GAME FIREBASE/LOGIC (YOUR PART) ----*/}
 // Initialize user document if doesn't exist
 export const initializeUser = async (user: any) => {
@@ -1143,6 +1250,7 @@ export const makeGroupPrediction = async (predictionData: {
     console.error("Error making group prediction:", error);
     throw error;
   }
+>>>>>>> c02a28272bebd9f2bf4ce0d63ac1d30c31ece5d4
 };
 
 // ADD THESE FUNCTIONS TO YOUR components/firebaseFunctions.tsx file
