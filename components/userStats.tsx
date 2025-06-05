@@ -1,25 +1,9 @@
 import { View, Text, StyleSheet } from "react-native";
 import React from "react";
+import { UserStatsProps } from '@/types';
 
-
-
-interface User {
-  userName: string,
-  totalPoints: number;
-  correctPredictions: number;
-  totalPredictions: number;
-  gamesPlayed: number;
-  lastPlayed: any;
-}
-
-export const UserStats: React.FC<{
-  currentUser: User;
-  authUser: any;
-  getCurrentUserRank: () => number;
-  getRankSuffix: (rank: number) => string;
-  getAccuracy: (correct: number, total: number) => number;
-  formatLastPlayed: (timestamp: any) => string;
-}> = ({
+export const UserStats: React.FC<UserStatsProps>
+= ({
   currentUser,
   authUser,
   getCurrentUserRank,

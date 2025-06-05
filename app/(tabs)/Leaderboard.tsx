@@ -3,23 +3,11 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {StyleSheet,ScrollView,View,Text,SafeAreaView,RefreshControl,} from 'react-native';
 import { onAuthStateChanged } from 'firebase/auth';
 import { router } from 'expo-router';
+import { User } from '@/types';
 import { UserStats } from '../../components/userStats';
 import {getLeaderboardUsers, getUserById, createUserIfNotExists,} from '../../components/firebaseFunctions';
 import { auth } from '../../firebaseConfig';
 import { Timestamp } from 'firebase/firestore';
-
-// Types
-interface User {
-  id: string;
-  userName?: string;
-  name: string;
-  email?: string;
-  totalPoints: number;
-  gamesPlayed: number;
-  correctPredictions: number;
-  totalPredictions: number;
-  lastPlayed: Timestamp | Date | string;
-}
 
 export default function LeaderboardScreen() {
   const [leaderboard, setLeaderboard] = useState<User[]>([]);
@@ -47,9 +35,6 @@ export default function LeaderboardScreen() {
     if (playerId) {
       loadLeaderboard();
       loadCurrentUser();
-
-      // Optionally, set up a polling interval or real-time listener in firebaseFunctions.tsx
-      // For simplicity, just reload on refresh or mount
     }
   }, [playerId]);
 
