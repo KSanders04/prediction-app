@@ -27,4 +27,9 @@ describe("SignOut Screen", () => {
     expect(alertSpy).toHaveBeenCalled();
     alertSpy.mockRestore();
   });
+
+      it('matches snapshot', () => {
+        const tree = render(<Signout />).toJSON();
+        expect(tree).toMatchSnapshot();
+    });
 });

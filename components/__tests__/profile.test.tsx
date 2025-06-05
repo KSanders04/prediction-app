@@ -70,13 +70,18 @@ describe('Profile Screen', () => {
     );
   });
 
-    it('renders Change Password button and responds to press', async () => {
-        const { getByText } = render(<Profile />);
+  it('renders Change Password button and responds to press', async () => {
+      const { getByText } = render(<Profile />);
 
-        const button = await waitFor(() => getByText('Change Password'));
-        expect(button).toBeTruthy();
+      const button = await waitFor(() => getByText('Change Password'));
+      expect(button).toBeTruthy();
 
-        //This test shows that button does press and that no crashes happen
-        fireEvent.press(button);
-    });
+      //This test shows that button does press and that no crashes happen
+      fireEvent.press(button);
+  });
+
+    it('matches snapshot', () => {
+      const tree = render(<Profile />).toJSON();
+      expect(tree).toMatchSnapshot();
+  });
 });
