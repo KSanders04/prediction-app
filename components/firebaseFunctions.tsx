@@ -28,7 +28,10 @@ import {
   arrayRemove
 } from "firebase/firestore";
 
-{/*---- LOGIN FIREBASE/LOGIC ----*/}
+// Import types from types folder
+import { GroupData } from '@/types';
+
+{/*---- AUTHENTICATION FIREBASE/LOGIC ----*/}
 // Handles user sign in with email and password
 export const emailSignIn = async (email: string, password: string) => {
   try {
@@ -56,7 +59,6 @@ export const emailSignIn = async (email: string, password: string) => {
   }
 };
 
-{/*---- CREATE ACCOUNT FIREBASE/LOGIC ----*/}
 // Handles user sign up with email, password, and profile info
 export const emailSignUp = async (
   email: string,
@@ -107,11 +109,11 @@ export const emailSignUp = async (
   return user;
 };
 
-{/*---- SIGN OUT FIREBASE/LOGIC ----*/}
 // Handles user sign out
 export const signOutUser = async () => {
   await auth.signOut();
 };
+
 // Listen for auth state changes and redirect if not logged in
 export const listenForSignOut = (redirect: () => void) => {
   getAuth().onAuthStateChanged((user) => {
@@ -119,7 +121,7 @@ export const listenForSignOut = (redirect: () => void) => {
   });
 };
 
-{/*---- PROFILE FIREBASE/LOGIC ----*/}
+{/*---- USER PROFILE FIREBASE/LOGIC ----*/}
 // Get current user
 export const getCurrentUser = () => {
   return auth.currentUser;
@@ -173,7 +175,6 @@ export const formatLastPlayed = (timestamp: any) => {
   return date.toLocaleDateString();
 };
 
-{/*---- CHANGE PASSWORD FIREBASE/LOGIC ----*/}
 // Change password logic for use in changePasswordPage
 export const changePassword = async (
   currentPassword: string,
@@ -186,6 +187,114 @@ export const changePassword = async (
   const credential = EmailAuthProvider.credential(user.email, currentPassword);
   await reauthenticateWithCredential(user, credential);
   await updatePassword(user, newPassword);
+};
+
+{/*---- LEADERBOARD FIREBASE/LOGIC ----*/}
+// Fetch top N users for leaderboard
+export const getLeaderboardUsers = async (limitCount = 50) => {
+  const leaderboardQuery = query(
+    collection(db, "users"),
+    orderBy("totalPoints", "desc"),
+    limit(limitCount)
+  );
+  const snapshot = await getDocs(leaderboardQuery);
+  type LeaderboardUser = {
+    id: string;
+    userName: string;
+    name: string;
+    email: string;
+    totalPoints: number;
+    gamesPlayed: number;
+    correctPredictions: number;
+    totalPredictions: number;
+    lastPlayed: any;
+  };
+
+  const users: LeaderboardUser[] = [];
+  snapshot.forEach((docSnap) => {
+    const userData = docSnap.data();
+    users.push({
+      id: docSnap.id,
+      userName: userData.userName || `User_${docSnap.id.slice(0, 6)}`,
+      name: userData.userName || userData.email || userData.name || userData.uid || `User_${docSnap.id.slice(0, 6)}`,
+      email: userData.email,
+      totalPoints: userData.totalPoints || 0,
+      gamesPlayed: userData.gamesPlayed || 0,
+      correctPredictions: userData.correctPredictions || 0,
+      totalPredictions: userData.totalPredictions || 0,
+      lastPlayed: userData.lastPlayed || new Date()
+    });
+  });
+  return users;
+};
+
+// Fetch user by ID
+export const getUserById = async (uid: string) => {
+  const userRef = doc(db, "users", uid);
+  const userSnap = await getDoc(userRef);
+  if (userSnap.exists()) {
+    const userData = userSnap.data();
+    return {
+      id: userSnap.id,
+      userName: userData.userName || `User_${userSnap.id.slice(0, 6)}`,
+      name: userData.userName || userData.email || userData.name || userData.uid || `User_${userSnap.id.slice(0, 6)}`,
+      email: userData.email,
+      totalPoints: userData.totalPoints || 0,
+      gamesPlayed: userData.gamesPlayed || 0,
+      correctPredictions: userData.correctPredictions || 0,
+      totalPredictions: userData.totalPredictions || 0,
+      lastPlayed: userData.lastPlayed || new Date()
+    };
+  }
+  return null;
+};
+
+// Create user if not exists
+export const createUserIfNotExists = async (authUser: any) => {
+  const playerId = authUser.uid;
+  const userRef = doc(db, "users", playerId);
+  const userSnap = await getDoc(userRef);
+  if (!userSnap.exists()) {
+    // Generate a userName (try displayName, then email prefix, then fallback)
+    const userName =
+      authUser.displayName ||
+      (authUser.email ? authUser.email.split('@')[0] : null) ||
+      `User_${playerId.slice(0, 6)}`;
+
+    const newUserData = {
+      email: authUser.email,
+      name: authUser.displayName || authUser.email || `User_${playerId.slice(0, 6)}`,
+      userName, // <-- Add userName here
+      totalPoints: 0,
+      gamesPlayed: 0,
+      correctPredictions: 0,
+      totalPredictions: 0,
+      lastPlayed: Timestamp.fromDate(new Date()),
+      createdAt: Timestamp.fromDate(new Date()),
+      isGamemaster: null
+    };
+    await setDoc(userRef, newUserData);
+    return {
+      id: playerId,
+      ...newUserData
+    };
+  }
+  // If user exists, return the user object in the same shape as getUserById
+  if (userSnap.exists()) {
+    const userData = userSnap.data();
+    return {
+      id: userSnap.id,
+      userName: userData.userName || `User_${userSnap.id.slice(0, 6)}`,
+      name: userData.userName || userData.email || userData.name || userData.uid || `User_${userSnap.id.slice(0, 6)}`,
+      email: userData.email,
+      totalPoints: userData.totalPoints || 0,
+      gamesPlayed: userData.gamesPlayed || 0,
+      correctPredictions: userData.correctPredictions || 0,
+      totalPredictions: userData.totalPredictions || 0,
+      lastPlayed: userData.lastPlayed || new Date()
+    };
+  }
+  return null;
 };
 
 {/*---- ACTIVE PLAYERS FIREBASE/LOGIC ----*/}
@@ -236,7 +345,7 @@ export const formatTimeAgo = (timestamp: Timestamp): string => {
   }
 };
 
-{/*---- NEW: HOME GAME FIREBASE/LOGIC (YOUR PART) ----*/}
+{/*---- GAME MANAGEMENT FIREBASE/LOGIC ----*/}
 // Initialize user document if doesn't exist
 export const initializeUser = async (user: any) => {
   if (!user) return;
@@ -508,6 +617,88 @@ export const endGame = async (gameId: string, adminId: string) => {
   }
 };
 
+// Join game
+export const joinGame = async (gameId: string, userEmail: string) => {
+  try {
+    const gameRef = doc(db, "games", gameId);
+    const gameDoc = await getDoc(gameRef);
+    
+    if (gameDoc.exists()) {
+      const gameData = gameDoc.data();
+      const liveViewers = Array.from(new Set([...(gameData.liveViewers || []), userEmail]));
+      const totalViewers = Array.from(new Set([...(gameData.totalViewers || []), userEmail]));
+      
+      await updateDoc(gameRef, {
+        liveViewers,
+        totalViewers
+      });
+    }
+  } catch (error) {
+    console.error("Error joining game:", error);
+    throw error;
+  }
+};
+
+// Leave game (for when switching games)
+export const leaveGame = async (gameId: string, userEmail: string) => {
+  try {
+    const gameRef = doc(db, "games", gameId);
+    const gameDoc = await getDoc(gameRef);
+    
+    if (gameDoc.exists()) {
+      const gameData = gameDoc.data();
+      const updatedLiveViewers = (gameData.liveViewers || [])
+        .filter((email: string) => email !== userEmail);
+      
+      await updateDoc(gameRef, {
+        liveViewers: updatedLiveViewers
+      });
+    }
+  } catch (error) {
+    console.error("Error leaving game:", error);
+    throw error;
+  }
+};
+
+// Load user data
+export const loadUserData = async (playerId: string) => {
+  if (!playerId) return null;
+  
+  try {
+    const userRef = doc(db, 'users', playerId);
+    const userSnap = await getDoc(userRef);
+    
+    if (userSnap.exists()) {
+      return userSnap.data();
+    }
+    return null;
+  } catch (error) {
+    console.error('Error loading user data:', error);
+    throw error;
+  }
+};
+
+// Check user gamemaster status
+export const checkUserGameMasterStatus = async (uid: string) => {
+  try {
+    const userRef = doc(db, 'users', uid);
+    const userSnap = await getDoc(userRef);
+    
+    if (userSnap.exists()) {
+      const data = userSnap.data();
+      return {
+        isGamemaster: data.isGamemaster === true,
+        userData: data
+      };
+    }
+    return { isGamemaster: false, userData: null };
+  } catch (error) {
+    console.error('Error checking gamemaster status:', error);
+    throw error;
+  }
+};
+
+{/*---- QUESTION MANAGEMENT FIREBASE/LOGIC ----*/}
 // Create question from template
 export const createQuestionFromTemplate = async (
   gameId: string,
@@ -650,6 +841,7 @@ export const setAnswer = async (questionId: string, answer: string, gameId: stri
   }
 };
 
+{/*---- PREDICTION MANAGEMENT FIREBASE/LOGIC ----*/}
 // Make prediction
 export const makePrediction = async (predictionData: {
   questionId: string;
@@ -727,49 +919,7 @@ export const listenToGuesses = (questionId: string, callback: (guesses: any[]) =
   });
 };
 
-// Join game
-export const joinGame = async (gameId: string, userEmail: string) => {
-  try {
-    const gameRef = doc(db, "games", gameId);
-    const gameDoc = await getDoc(gameRef);
-    
-    if (gameDoc.exists()) {
-      const gameData = gameDoc.data();
-      const liveViewers = Array.from(new Set([...(gameData.liveViewers || []), userEmail]));
-      const totalViewers = Array.from(new Set([...(gameData.totalViewers || []), userEmail]));
-      
-      await updateDoc(gameRef, {
-        liveViewers,
-        totalViewers
-      });
-    }
-  } catch (error) {
-    console.error("Error joining game:", error);
-    throw error;
-  }
-};
-
-// Leave game (for when switching games)
-export const leaveGame = async (gameId: string, userEmail: string) => {
-  try {
-    const gameRef = doc(db, "games", gameId);
-    const gameDoc = await getDoc(gameRef);
-    
-    if (gameDoc.exists()) {
-      const gameData = gameDoc.data();
-      const updatedLiveViewers = (gameData.liveViewers || [])
-        .filter((email: string) => email !== userEmail);
-      
-      await updateDoc(gameRef, {
-        liveViewers: updatedLiveViewers
-      });
-    }
-  } catch (error) {
-    console.error("Error leaving game:", error);
-    throw error;
-  }
-};
-
+{/*---- SCORING & STATISTICS FIREBASE/LOGIC ----*/}
 // Update user stats
 export const updateUserStats = async (userId: string, isCorrect: boolean) => {
   try {
@@ -865,60 +1015,8 @@ export const calculateWinners = async (questionId: string, correctAnswer: string
     throw error;
   }
 };
-// Add this to firebaseFunctions.tsx
-export const loadUserData = async (playerId: string) => {
-  if (!playerId) return null;
-  
-  try {
-    const userRef = doc(db, 'users', playerId);
-    const userSnap = await getDoc(userRef);
-    
-    if (userSnap.exists()) {
-      return userSnap.data();
-    }
-    return null;
-  } catch (error) {
-    console.error('Error loading user data:', error);
-    throw error;
-  }
-};
 
-
-export const checkUserGameMasterStatus = async (uid: string) => {
-  try {
-    const userRef = doc(db, 'users', uid);
-    const userSnap = await getDoc(userRef);
-    
-    if (userSnap.exists()) {
-      const data = userSnap.data();
-      return {
-        isGamemaster: data.isGamemaster === true,
-        userData: data
-      };
-    }
-    return { isGamemaster: false, userData: null };
-  } catch (error) {
-    console.error('Error checking gamemaster status:', error);
-    throw error;
-  }
-};
-
-/*---- GROUP FIREBASE/LOGIC (ADD THESE TO YOUR firebaseFunctions.tsx) ----*/
-
-// Group interfaces
-export interface GroupData {
-  id: string;
-  code: string;
-  groupStatus: string;
-  createdBy: string;
-  members: string[];
-  groupName: string;
-  currentGameId?: string;
-  currentGameName?: string;
-  url?: string;
-  groupAdminID: string;
-}
-
+{/*---- GROUP MANAGEMENT FIREBASE/LOGIC ----*/}
 // Check if user is group admin
 export const checkUserGroupStatus = async (userEmail: string, userId: string) => {
   try {
@@ -1003,6 +1101,234 @@ export const setGroupGame = async (groupId: string, gameId: string, gameName: st
   }
 };
 
+// Fetch active group
+export const fetchActiveGroup = async (currentUser: any) => {
+  if (!currentUser) return null;
+  
+  try {
+    const groupsRef = collection(db, 'groups');
+    
+    // Check if user is a member
+    const memberQ = query(
+      groupsRef,
+      where('groupStatus', '==', 'active'),
+      where('members', 'array-contains', currentUser.uid)
+    );
+    const memberSnapshot = await getDocs(memberQ);
+
+    // Check if user is admin (createdBy)
+    const adminQ = query(
+      groupsRef,
+      where('groupStatus', '==', 'active'),
+      where('createdBy', '==', currentUser.email)
+    );
+    const adminSnapshot = await getDocs(adminQ);
+
+    if (!memberSnapshot.empty) {
+      const groupDoc = memberSnapshot.docs[0];
+      return { 
+        id: groupDoc.id,
+        ...groupDoc.data() 
+      };
+    } else if (!adminSnapshot.empty) {
+      const groupDoc = adminSnapshot.docs[0];
+      return { 
+        id: groupDoc.id,
+        ...groupDoc.data() 
+      };
+    } else {
+      return null;
+    }
+  } catch (error) {
+    console.error("Error fetching active group:", error);
+    throw error;
+  }
+};
+
+// Create group function
+export const createGroupFunction = async (groupName: string, currentUser: any) => {
+  try {
+    if (!currentUser?.email) {
+      throw new Error('You must be logged in to create a group');
+    }
+
+    const groupsRef = collection(db, 'groups');
+    
+    // Check if admin already has an active group
+    const alreadyHasGroup = query(
+      groupsRef,
+      where('createdBy', '==', currentUser.email),
+      where('groupStatus', '==', 'active')
+    );
+    const alreadyHasGroupSnapshot = await getDocs(alreadyHasGroup);
+
+    if (!alreadyHasGroupSnapshot.empty) {
+      const existingGroup = alreadyHasGroupSnapshot.docs[0].data();
+      throw new Error('You already have an active group. Code: ' + existingGroup.code);
+    }
+
+    // Check if user is already in a group
+    const inGroupCreateGroup = query(
+      groupsRef,
+      where('members', 'array-contains', currentUser.uid),
+      where('groupStatus', '==', 'active')
+    );
+    const createGroupSnapshot = await getDocs(inGroupCreateGroup);
+
+    if (!createGroupSnapshot.empty) {
+      throw new Error('You are already in a group. Please leave before creating a new one.');
+    }
+
+    // Generate random code
+    const min = 100000;
+    const max = 999999;
+    const randomCode = Math.floor(Math.random() * (max - min + 1)) + min;
+
+    // Create group data
+    const groupData = {
+      code: randomCode.toString(),
+      createdAt: new Date(),
+      createdBy: currentUser.email,
+      members: [currentUser.uid],
+      groupStatus: 'active',
+      adminId: currentUser.uid,
+      groupName: groupName.trim()
+    };
+
+    await addDoc(collection(db, 'groups'), groupData);
+    return randomCode.toString();
+  } catch (error: any) {
+    console.error("Error creating group:", error);
+    throw error;
+  }
+};
+
+// Join group function
+export const joinGroupFunction = async (code: string, currentUser: any) => {
+  try {
+    if (!code.trim()) {
+      throw new Error('Please enter a group code');
+    }
+    if (!currentUser?.email) {
+      throw new Error('You must be logged in to join a group');
+    }
+
+    const groupsRef = collection(db, 'groups');
+    const q = query(groupsRef, where('code', '==', code));
+    const querySnapshot = await getDocs(q);
+
+    if (querySnapshot.empty) {
+      throw new Error('Group not found. Please check the code and try again.');
+    }
+
+    const groupDoc = querySnapshot.docs[0];
+    const groupData = groupDoc.data();
+    
+    if (groupData.createdBy === currentUser.email) {
+      throw new Error('You cannot join your own group. Please create a new group instead.');
+    }
+    
+    if (groupData.groupStatus === 'closed') {
+      throw new Error('This group is no longer active and cannot accept new members.');
+    }
+    
+    if (groupData.members?.includes(currentUser.uid)) {
+      throw new Error('You are already a member of this group');
+    }
+
+    // Add user to members array
+    const updatedMembers = [...(groupData.members || []), currentUser.uid];
+    await updateDoc(doc(db, 'groups', groupDoc.id), {
+      members: updatedMembers
+    });
+
+    // Optionally update user's groups array in Firestore
+    const userRef = doc(db, 'users', currentUser.uid);
+    await updateDoc(userRef, {
+      groups: arrayUnion(groupDoc.id)
+    });
+
+    return 'Successfully joined the group!';
+  } catch (error: any) {
+    console.error("Error joining group:", error);
+    throw error;
+  }
+};
+
+// Close group function
+export const closeGroupFunction = async (currentUser: any) => {
+  try {
+    const groupsRef = collection(db, 'groups');
+    const q = query(
+      groupsRef, 
+      where('createdBy', '==', currentUser?.email), 
+      where('groupStatus', '==', 'active')
+    );
+    const querySnapshot = await getDocs(q);
+    
+    if (querySnapshot.empty) {
+      throw new Error('You do not have an active group to close.');
+    }
+    
+    const groupDoc = querySnapshot.docs[0];
+    const groupData = groupDoc.data();
+
+    if (groupData.createdBy !== currentUser?.email) {
+      throw new Error('You can only close your own groups.');
+    }
+
+    await updateDoc(doc(db, 'groups', groupDoc.id), {
+      groupStatus: 'closed',
+      members: []
+    });
+
+    return 'Group closed successfully.';
+  } catch (error: any) {
+    console.error("Error closing group:", error);
+    throw error;
+  }
+};
+
+// Leave group function
+export const leaveGroupFunction = async (currentUser: any) => {
+  try {
+    const groupsRef = collection(db, 'groups');
+    const q = query(
+      groupsRef, 
+      where('members', 'array-contains', currentUser?.uid), 
+      where('groupStatus', '==', 'active')
+    );
+    const querySnapshot = await getDocs(q);
+
+    if (!currentUser?.uid) {
+      throw new Error('You must be logged in to leave a group');
+    }
+    
+    if (querySnapshot.empty) {
+      throw new Error('You are not a member of any active group.');
+    }
+    
+    const groupDoc = querySnapshot.docs[0];
+    const groupData = groupDoc.data();
+
+    await updateDoc(doc(db, 'groups', groupDoc.id), {
+      members: groupData.members.filter((member: string) => member !== currentUser.uid)
+    });
+
+    // Remove group from user's groups array
+    const userRef = doc(db, 'users', currentUser.uid);
+    await updateDoc(userRef, {
+      groups: arrayRemove(groupDoc.id)
+    });
+
+    return 'You have successfully left your group.';
+  } catch (error: any) {
+    console.error("Error leaving group:", error);
+    throw error;
+  }
+};
+
+{/*---- GROUP LEADERBOARD FIREBASE/LOGIC ----*/}
 // Reset group leaderboard
 export const resetGroupLeaderboard = async (groupId: string) => {
   try {
@@ -1143,230 +1469,4 @@ export const makeGroupPrediction = async (predictionData: {
     console.error("Error making group prediction:", error);
     throw error;
   }
-};
-
-// ADD THESE FUNCTIONS TO YOUR components/firebaseFunctions.tsx file
-
-// Group Management Functions
-export const fetchActiveGroup = async (currentUser: any) => {
-  if (!currentUser) return null;
-  
-  try {
-    const groupsRef = collection(db, 'groups');
-    
-    // Check if user is a member
-    const memberQ = query(
-      groupsRef,
-      where('groupStatus', '==', 'active'),
-      where('members', 'array-contains', currentUser.uid)
-    );
-    const memberSnapshot = await getDocs(memberQ);
-
-    // Check if user is admin (createdBy)
-    const adminQ = query(
-      groupsRef,
-      where('groupStatus', '==', 'active'),
-      where('createdBy', '==', currentUser.email)
-    );
-    const adminSnapshot = await getDocs(adminQ);
-
-    if (!memberSnapshot.empty) {
-      const groupDoc = memberSnapshot.docs[0];
-      return { 
-        id: groupDoc.id,
-        ...groupDoc.data() 
-      };
-    } else if (!adminSnapshot.empty) {
-      const groupDoc = adminSnapshot.docs[0];
-      return { 
-        id: groupDoc.id,
-        ...groupDoc.data() 
-      };
-    } else {
-      return null;
-    }
-  } catch (error) {
-    console.error("Error fetching active group:", error);
-    throw error;
-  }
-};
-
-export const createGroupFunction = async (groupName: string, currentUser: any) => {
-  try {
-    if (!currentUser?.email) {
-      throw new Error('You must be logged in to create a group');
-    }
-
-    const groupsRef = collection(db, 'groups');
-    
-    // Check if admin already has an active group
-    const alreadyHasGroup = query(
-      groupsRef,
-      where('createdBy', '==', currentUser.email),
-      where('groupStatus', '==', 'active')
-    );
-    const alreadyHasGroupSnapshot = await getDocs(alreadyHasGroup);
-
-    if (!alreadyHasGroupSnapshot.empty) {
-      const existingGroup = alreadyHasGroupSnapshot.docs[0].data();
-      throw new Error('You already have an active group. Code: ' + existingGroup.code);
-    }
-
-    // Check if user is already in a group
-    const inGroupCreateGroup = query(
-      groupsRef,
-      where('members', 'array-contains', currentUser.uid),
-      where('groupStatus', '==', 'active')
-    );
-    const createGroupSnapshot = await getDocs(inGroupCreateGroup);
-
-    if (!createGroupSnapshot.empty) {
-      throw new Error('You are already in a group. Please leave before creating a new one.');
-    }
-
-    // Generate random code
-    const min = 100000;
-    const max = 999999;
-    const randomCode = Math.floor(Math.random() * (max - min + 1)) + min;
-
-    // Create group data
-    const groupData = {
-      code: randomCode.toString(),
-      createdAt: new Date(),
-      createdBy: currentUser.email,
-      members: [currentUser.uid],
-      groupStatus: 'active',
-      adminId: currentUser.uid,
-      groupName: groupName.trim()
-    };
-
-    await addDoc(collection(db, 'groups'), groupData);
-    return randomCode.toString();
-  } catch (error: any) {
-    console.error("Error creating group:", error);
-    throw error;
-  }
-};
-
-export const joinGroupFunction = async (code: string, currentUser: any) => {
-  try {
-    if (!code.trim()) {
-      throw new Error('Please enter a group code');
-    }
-    if (!currentUser?.email) {
-      throw new Error('You must be logged in to join a group');
-    }
-
-    const groupsRef = collection(db, 'groups');
-    const q = query(groupsRef, where('code', '==', code));
-    const querySnapshot = await getDocs(q);
-
-    if (querySnapshot.empty) {
-      throw new Error('Group not found. Please check the code and try again.');
-    }
-
-    const groupDoc = querySnapshot.docs[0];
-    const groupData = groupDoc.data();
-    
-    if (groupData.createdBy === currentUser.email) {
-      throw new Error('You cannot join your own group. Please create a new group instead.');
-    }
-    
-    if (groupData.groupStatus === 'closed') {
-      throw new Error('This group is no longer active and cannot accept new members.');
-    }
-    
-    if (groupData.members?.includes(currentUser.uid)) {
-      throw new Error('You are already a member of this group');
-    }
-
-    // Add user to members array
-    const updatedMembers = [...(groupData.members || []), currentUser.uid];
-    await updateDoc(doc(db, 'groups', groupDoc.id), {
-      members: updatedMembers
-    });
-
-    // Optionally update user's groups array in Firestore
-    const userRef = doc(db, 'users', currentUser.uid);
-    await updateDoc(userRef, {
-      groups: arrayUnion(groupDoc.id)
-    });
-
-    return 'Successfully joined the group!';
-  } catch (error: any) {
-    console.error("Error joining group:", error);
-    throw error;
-  }
-};
-
-export const closeGroupFunction = async (currentUser: any) => {
-  try {
-    const groupsRef = collection(db, 'groups');
-    const q = query(
-      groupsRef, 
-      where('createdBy', '==', currentUser?.email), 
-      where('groupStatus', '==', 'active')
-    );
-    const querySnapshot = await getDocs(q);
-    
-    if (querySnapshot.empty) {
-      throw new Error('You do not have an active group to close.');
-    }
-    
-    const groupDoc = querySnapshot.docs[0];
-    const groupData = groupDoc.data();
-
-    if (groupData.createdBy !== currentUser?.email) {
-      throw new Error('You can only close your own groups.');
-    }
-
-    await updateDoc(doc(db, 'groups', groupDoc.id), {
-      groupStatus: 'closed',
-      members: []
-    });
-
-    return 'Group closed successfully.';
-  } catch (error: any) {
-    console.error("Error closing group:", error);
-    throw error;
-  }
-};
-
-export const leaveGroupFunction = async (currentUser: any) => {
-  try {
-    const groupsRef = collection(db, 'groups');
-    const q = query(
-      groupsRef, 
-      where('members', 'array-contains', currentUser?.uid), 
-      where('groupStatus', '==', 'active')
-    );
-    const querySnapshot = await getDocs(q);
-
-    if (!currentUser?.uid) {
-      throw new Error('You must be logged in to leave a group');
-    }
-    
-    if (querySnapshot.empty) {
-      throw new Error('You are not a member of any active group.');
-    }
-    
-    const groupDoc = querySnapshot.docs[0];
-    const groupData = groupDoc.data();
-
-    await updateDoc(doc(db, 'groups', groupDoc.id), {
-      members: groupData.members.filter((member: string) => member !== currentUser.uid)
-    });
-
-    // Remove group from user's groups array
-    const userRef = doc(db, 'users', currentUser.uid);
-    await updateDoc(userRef, {
-      groups: arrayRemove(groupDoc.id)
-    });
-
-    return 'You have successfully left your group.';
-  } catch (error: any) {
-    console.error("Error leaving group:", error);
-    throw error;
-  }
-  
 };
