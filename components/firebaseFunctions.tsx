@@ -236,7 +236,6 @@ export const formatTimeAgo = (timestamp: Timestamp): string => {
   }
 };
 
-<<<<<<< HEAD
 // Fetch top N users for leaderboard
 export const getLeaderboardUsers = async (limitCount = 50) => {
   const leaderboardQuery = query(
@@ -342,7 +341,8 @@ export const createUserIfNotExists = async (authUser: any) => {
     };
   }
   return null;
-=======
+};
+
 {/*---- NEW: HOME GAME FIREBASE/LOGIC (YOUR PART) ----*/}
 // Initialize user document if doesn't exist
 export const initializeUser = async (user: any) => {
@@ -972,7 +972,8 @@ export const calculateWinners = async (questionId: string, correctAnswer: string
     throw error;
   }
 };
-// Add this to firebaseFunctions.tsx
+
+// Load user data
 export const loadUserData = async (playerId: string) => {
   if (!playerId) return null;
   
@@ -990,7 +991,7 @@ export const loadUserData = async (playerId: string) => {
   }
 };
 
-
+// Check user gamemaster status
 export const checkUserGameMasterStatus = async (uid: string) => {
   try {
     const userRef = doc(db, 'users', uid);
@@ -1010,7 +1011,7 @@ export const checkUserGameMasterStatus = async (uid: string) => {
   }
 };
 
-/*---- GROUP FIREBASE/LOGIC (ADD THESE TO YOUR firebaseFunctions.tsx) ----*/
+{/*---- GROUP FIREBASE/LOGIC ----*/}
 
 // Group interfaces
 export interface GroupData {
@@ -1250,10 +1251,7 @@ export const makeGroupPrediction = async (predictionData: {
     console.error("Error making group prediction:", error);
     throw error;
   }
->>>>>>> c02a28272bebd9f2bf4ce0d63ac1d30c31ece5d4
 };
-
-// ADD THESE FUNCTIONS TO YOUR components/firebaseFunctions.tsx file
 
 // Group Management Functions
 export const fetchActiveGroup = async (currentUser: any) => {
@@ -1476,5 +1474,4 @@ export const leaveGroupFunction = async (currentUser: any) => {
     console.error("Error leaving group:", error);
     throw error;
   }
-  
 };

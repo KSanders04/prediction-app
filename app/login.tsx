@@ -40,7 +40,7 @@ const index = () => {
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >
-            <Text style={styles.title}>Sign In</Text>
+            <Text style={styles.title}>Play By Play</Text>
             <TextInput
               style={styles.textInput}
               placeholder="Email"
