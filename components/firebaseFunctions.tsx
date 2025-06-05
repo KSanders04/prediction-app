@@ -23,28 +23,37 @@ import {
   Timestamp,
 } from "firebase/firestore";
 
+
+//Handles if user has an account
+export const createUserDocIfNotExists = async (
+  user: any,
+  extraFields: Record<string, any> = {}
+) => {
+  const userRef = doc(db, "users", user.uid);
+  const userSnap = await getDoc(userRef);
+
+  if (!userSnap.exists()) {
+    await setDoc(userRef, {
+      uid: user.uid,
+      email: user.email,
+      createdAt: new Date().toISOString(),
+      isGamemaster: null,
+      correctPredictions: 0,
+      gamesPlayed: 0,
+      totalPoints: 0,
+      totalPredictions: 0,
+      ...extraFields,
+    });
+  }
+};
+
 {/*---- LOGIN FIREBASE/LOGIC ----*/}
 // Handles user sign in with email and password
 export const emailSignIn = async (email: string, password: string) => {
   try {
     const user = await signInWithEmailAndPassword(auth, email, password);
     const userCredential = user.user;
-    const userRef = doc(db, "users", userCredential.uid);
-    const userSnap = await getDoc(userRef);
-
-    // If user doc doesn't exist, create it with default values
-    if (!userSnap.exists()) {
-      await setDoc(userRef, {
-        uid: userCredential.uid,
-        email: userCredential.email,
-        createdAt: new Date().toISOString(),
-        isGamemaster: null,
-        correctPredictions: 0,
-        gamesPlayed: 0,
-        totalPoints: 0,
-        totalPredictions: 0,
-      });
-    }
+    await createUserDocIfNotExists(userCredential);
     return user;
   } catch (error: any) {
     throw error;
@@ -80,24 +89,13 @@ export const emailSignUp = async (
   // Create account
   const user = await createUserWithEmailAndPassword(auth, email, password);
   const userCredential = user.user;
-  const userRef = doc(db, "users", userCredential.uid);
-  const userSnap = await getDoc(userRef);
-
-  if (!userSnap.exists()) {
-    await setDoc(userRef, {
-      uid: userCredential.uid,
-      firstName,
-      lastName,
-      userName,
-      email: userCredential.email,
-      createdAt: new Date().toISOString(),
-      isAdmin: null,
-      correctPredictions: 0,
-      gamesPlayed: 0,
-      totalPoints: 0,
-      totalPredictions: 0,
-    });
-  }
+  await createUserDocIfNotExists(userCredential, {
+    email,
+    password,
+    firstName,
+    lastName,
+    userName,
+  });
 
   return user;
 };
