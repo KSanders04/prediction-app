@@ -39,11 +39,7 @@ const index = () => {
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >
-<<<<<<< HEAD
-            <Text style={styles.title} testID="sign-in-text">Sign In</Text>
-=======
             <Text style={styles.title}>Play By Play</Text>
->>>>>>> 37b086daad3d7642a07577890da716b411c29fea
             <TextInput
               style={styles.textInput}
               placeholder="Email"
