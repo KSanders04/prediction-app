@@ -2,12 +2,8 @@ import { StyleSheet, TouchableOpacity, Text, Alert, View } from 'react-native';
 import { router } from 'expo-router';
 import { signOutUser, listenForSignOut } from '@/components/firebaseFunctions';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
-import Colors from '@/constants/Colors';
-import { useColorScheme } from '@/components/useColorScheme';
-import { useClientOnlyValue } from '@/components/useClientOnlyValue';
 
-
-export default function TabOneScreen() {
+export default function signout() {
   // Redirect to login if not authenticated
   listenForSignOut(() => router.replace('/'));
 

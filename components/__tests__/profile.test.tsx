@@ -8,7 +8,7 @@ jest.mock('@react-navigation/native', () => ({
   useNavigation: () => ({ navigate: jest.fn() }),
 }));
 
-jest.mock('prediction-app/app/(tabs)/signout.tsx', () => () => <></>);
+jest.mock('prediction-app/components/signout.tsx', () => () => <></>);
 
 jest.mock('../../components/firebaseFunctions', () => ({
   fetchUserData: jest.fn(),
