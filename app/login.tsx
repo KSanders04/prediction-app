@@ -3,7 +3,6 @@ import React, { useState } from "react";
 import { emailSignIn } from "@/components/firebaseFunctions";
 import { router } from "expo-router";
 
-
 const index = () => {
     // State for email and password input fields
   const [email, setEmail] = useState("");
@@ -40,7 +39,11 @@ const index = () => {
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >
+<<<<<<< HEAD
             <Text style={styles.title} testID="sign-in-text">Sign In</Text>
+=======
+            <Text style={styles.title}>Play By Play</Text>
+>>>>>>> 37b086daad3d7642a07577890da716b411c29fea
             <TextInput
               style={styles.textInput}
               placeholder="Email"

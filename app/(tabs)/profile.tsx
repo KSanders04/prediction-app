@@ -1,13 +1,13 @@
-
 import React, { useState, useEffect } from 'react';
 import {
   StyleSheet, View, Text, Image, TouchableOpacity, ActivityIndicator, Alert,
   ScrollView, TextInput
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
-import SignOut from './signout';
+import SignOut from '../../components/signout';
 import { ProfileStats } from '../../components/profileStats';
 import { useNavigation } from '@react-navigation/native';
+import { User } from '@/types'; // Import User type
 import {
   fetchUserData,
   uploadProfileImage,
@@ -27,11 +27,23 @@ type Navigation = {
 export default function Profile() {
   const navigation = useNavigation<Navigation>();
 
-  const [userData, setUserData] = useState({
-    name: '', firstName: '', lastName: '', userName: '', profilePic: '',
-    totalPoints: 0, correctPredictions: 0, totalPredictions: 0, gamesPlayed: 0, lastPlayed: null,
+  // Update userData to match User type
+  const [userData, setUserData] = useState<User>({
+    id: '',
+    name: '',
+    firstName: '',
+    lastName: '',
+    userName: '',
+    profilePic: '',
+    totalPoints: 0,
+    correctPredictions: 0,
+    totalPredictions: 0,
+    gamesPlayed: 0,
+    lastPlayed: null,
     groups: [],
+    email: '',
   });
+  
   const [uploading, setUploading] = useState(false);
   const [authUser, setAuthUser] = useState<any>(null);
   const [editingUsername, setEditingUsername] = useState(false);
@@ -48,11 +60,14 @@ export default function Profile() {
       setAuthUser(user);
       const data = await fetchUserData(user.uid);
       if (data) {
+        // Map the fetched data to match User type
         setUserData({
+          id: user.uid,
           name: data.name || `${data.firstName || ''} ${data.lastName || ''}`.trim() || `User_${user.uid.slice(0, 6)}`,
           firstName: data.firstName || '',
           lastName: data.lastName || '',
           userName: data.userName || '',
+          email: data.email || user.email || '',
           profilePic: data.profilePic || '',
           totalPoints: data.totalPoints || 0,
           correctPredictions: data.correctPredictions || 0,
@@ -183,7 +198,7 @@ export default function Profile() {
             <TouchableOpacity
               style={styles.editUsernameButton}
               onPress={() => {
-                setNewUsername(userData.userName);
+                setNewUsername(userData.userName || '');
                 setEditingUsername(true);
               }}
             >
@@ -277,7 +292,7 @@ export default function Profile() {
             </View>
           </View>
 
-          {/* Profile Stats */}
+          {/* Profile Stats - Now properly typed */}
           <View style={{ marginTop: 10, width: '100%' }}>
             <ProfileStats
               currentUser={userData}
@@ -298,8 +313,6 @@ export default function Profile() {
 Profile.navigationOptions = {
   headerShown: false,
 };
-
-// ...styles remain unchanged...
 
 const styles = StyleSheet.create({
   container: {
