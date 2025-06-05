@@ -1,7 +1,4 @@
 // app/(tabs)/home.tsx - SIMPLIFIED VERSION using firebaseFunctions.tsx
-import * as firebaseFunctions from '../../components/firebaseFunctions';
-console.log('Available functions:', Object.keys(firebaseFunctions));
-import { testFunction } from '../../components/firebaseFunctions';
 
 import React, { useState, useCallback, useEffect } from 'react';
 import {
@@ -34,13 +31,13 @@ import {
   listenToGuesses,
   joinGame,
   calculateWinners,
+  loadUserData,
+  checkUserGameMasterStatus
 } from '../../components/firebaseFunctions';
 
 // Still need auth for user state
 import { auth } from '../../firebaseConfig';
 import { onAuthStateChanged } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
-import { db } from '../../firebaseConfig';
 import { router } from 'expo-router';
 import YoutubePlayer from 'react-native-youtube-iframe';
 
@@ -111,57 +108,50 @@ export default function Home() {
   const [currentUserData, setCurrentUserData] = useState<any>(null);
   const [adminCurrentGameId, setAdminCurrentGameId] = useState<string | null>(null);
 
-  // Load current user data - simplified using firebaseFunctions
-  const loadCurrentUserData = useCallback(async () => {
-    if (!playerId) return;
-    
-    try {
-      const userRef = doc(db, 'users', playerId);
-      const userSnap = await getDoc(userRef);
-      
-      if (userSnap.exists()) {
-        const userData = userSnap.data();
-        setCurrentUserData(userData);
-      }
-    } catch (error) {
-      console.error('Error loading user data:', error);
+  // Replace the existing loadCurrentUserData function with:
+const loadCurrentUserData = useCallback(async () => {
+  if (!playerId) return;
+  
+  try {
+    const userData = await loadUserData(playerId);
+    if (userData) {
+      setCurrentUserData(userData);
     }
-  }, [playerId]);
+  } catch (error) {
+    console.error('Error loading user data:', error);
+  }
+}, [playerId]);
 
   // Check authentication and setup - using firebaseFunctions
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      if (user) {
-        setCurrentUser(user);
-        setPlayerId(user.uid);
+useEffect(() => {
+  const unsubscribe = onAuthStateChanged(auth, async (user) => {
+    if (user) {
+      setCurrentUser(user);
+      setPlayerId(user.uid);
+      
+      // Use functions from firebaseFunctions.tsx
+      await initializeUser(user);
+      await loadCurrentUserData();
+      
+      // Use firebaseFunctions instead of direct DB calls
+      const { isGamemaster, userData } = await checkUserGameMasterStatus(user.uid);
+      setIsGameMasterAccount(isGamemaster);
+      
+      if (userData) {
+        // Initialize templates using firebaseFunctions
+        await initializeQuestionTemplates();
+        const templates = await loadQuestionTemplates();
+        setQuestionTemplates(templates);
         
-        // Use functions from firebaseFunctions.tsx
-        await initializeUser(user);
         await loadCurrentUserData();
-        
-        const userRef = doc(db, 'users', user.uid);
-        const userSnap = await getDoc(userRef);
-
-        if (userSnap.exists()) {
-          const data = userSnap.data();
-          setIsGameMasterAccount(data.isGamemaster === true);
-          
-          // Initialize templates using firebaseFunctions
-          await initializeQuestionTemplates();
-          const templates = await loadQuestionTemplates();
-          setQuestionTemplates(templates);
-          
-          await loadCurrentUserData();
-        } else {
-          setIsGameMasterAccount(false);
-        }
-      } else {
-        router.replace('/login');
       }
-    });
+    } else {
+      router.replace('/login');
+    }
+  });
 
-    return () => unsubscribe();
-  }, [loadCurrentUserData]);
+  return () => unsubscribe();
+}, [loadCurrentUserData]);
 
   // Listen for games - using firebaseFunctions
   useEffect(() => {
@@ -427,8 +417,6 @@ export default function Home() {
         Alert.alert('Error', `Game not found: ${gameName}`);
         return;
       }
-
-      // Remove from previous game if exists (could add leaveGame function to firebaseFunctions)
       
       // Join new game using firebaseFunctions
       await joinGame(selectedGame.id, currentUser.email);
