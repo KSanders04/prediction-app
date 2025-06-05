@@ -26,19 +26,8 @@ import {
 } from 'firebase/firestore';
 import { router } from 'expo-router';
 
+import { User } from '@/types';
 import { UserStats } from '../../components/userStats';
-// Types
-interface User {
-  id: string;
-  userName?: string;
-  name: string;
-  email?: string;
-  totalPoints: number;
-  gamesPlayed: number;
-  correctPredictions: number;
-  totalPredictions: number;
-  lastPlayed: Timestamp;
-}
 
 export default function LeaderboardScreen() {
   const [leaderboard, setLeaderboard] = useState<User[]>([]);

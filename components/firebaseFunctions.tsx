@@ -23,7 +23,9 @@ import {
   Timestamp,
   addDoc,
   increment,
-  deleteDoc
+  deleteDoc,
+  arrayUnion,
+  arrayRemove
 } from "firebase/firestore";
 
 {/*---- LOGIN FIREBASE/LOGIC ----*/}
@@ -1141,4 +1143,230 @@ export const makeGroupPrediction = async (predictionData: {
     console.error("Error making group prediction:", error);
     throw error;
   }
+};
+
+// ADD THESE FUNCTIONS TO YOUR components/firebaseFunctions.tsx file
+
+// Group Management Functions
+export const fetchActiveGroup = async (currentUser: any) => {
+  if (!currentUser) return null;
+  
+  try {
+    const groupsRef = collection(db, 'groups');
+    
+    // Check if user is a member
+    const memberQ = query(
+      groupsRef,
+      where('groupStatus', '==', 'active'),
+      where('members', 'array-contains', currentUser.uid)
+    );
+    const memberSnapshot = await getDocs(memberQ);
+
+    // Check if user is admin (createdBy)
+    const adminQ = query(
+      groupsRef,
+      where('groupStatus', '==', 'active'),
+      where('createdBy', '==', currentUser.email)
+    );
+    const adminSnapshot = await getDocs(adminQ);
+
+    if (!memberSnapshot.empty) {
+      const groupDoc = memberSnapshot.docs[0];
+      return { 
+        id: groupDoc.id,
+        ...groupDoc.data() 
+      };
+    } else if (!adminSnapshot.empty) {
+      const groupDoc = adminSnapshot.docs[0];
+      return { 
+        id: groupDoc.id,
+        ...groupDoc.data() 
+      };
+    } else {
+      return null;
+    }
+  } catch (error) {
+    console.error("Error fetching active group:", error);
+    throw error;
+  }
+};
+
+export const createGroupFunction = async (groupName: string, currentUser: any) => {
+  try {
+    if (!currentUser?.email) {
+      throw new Error('You must be logged in to create a group');
+    }
+
+    const groupsRef = collection(db, 'groups');
+    
+    // Check if admin already has an active group
+    const alreadyHasGroup = query(
+      groupsRef,
+      where('createdBy', '==', currentUser.email),
+      where('groupStatus', '==', 'active')
+    );
+    const alreadyHasGroupSnapshot = await getDocs(alreadyHasGroup);
+
+    if (!alreadyHasGroupSnapshot.empty) {
+      const existingGroup = alreadyHasGroupSnapshot.docs[0].data();
+      throw new Error('You already have an active group. Code: ' + existingGroup.code);
+    }
+
+    // Check if user is already in a group
+    const inGroupCreateGroup = query(
+      groupsRef,
+      where('members', 'array-contains', currentUser.uid),
+      where('groupStatus', '==', 'active')
+    );
+    const createGroupSnapshot = await getDocs(inGroupCreateGroup);
+
+    if (!createGroupSnapshot.empty) {
+      throw new Error('You are already in a group. Please leave before creating a new one.');
+    }
+
+    // Generate random code
+    const min = 100000;
+    const max = 999999;
+    const randomCode = Math.floor(Math.random() * (max - min + 1)) + min;
+
+    // Create group data
+    const groupData = {
+      code: randomCode.toString(),
+      createdAt: new Date(),
+      createdBy: currentUser.email,
+      members: [currentUser.uid],
+      groupStatus: 'active',
+      adminId: currentUser.uid,
+      groupName: groupName.trim()
+    };
+
+    await addDoc(collection(db, 'groups'), groupData);
+    return randomCode.toString();
+  } catch (error: any) {
+    console.error("Error creating group:", error);
+    throw error;
+  }
+};
+
+export const joinGroupFunction = async (code: string, currentUser: any) => {
+  try {
+    if (!code.trim()) {
+      throw new Error('Please enter a group code');
+    }
+    if (!currentUser?.email) {
+      throw new Error('You must be logged in to join a group');
+    }
+
+    const groupsRef = collection(db, 'groups');
+    const q = query(groupsRef, where('code', '==', code));
+    const querySnapshot = await getDocs(q);
+
+    if (querySnapshot.empty) {
+      throw new Error('Group not found. Please check the code and try again.');
+    }
+
+    const groupDoc = querySnapshot.docs[0];
+    const groupData = groupDoc.data();
+    
+    if (groupData.createdBy === currentUser.email) {
+      throw new Error('You cannot join your own group. Please create a new group instead.');
+    }
+    
+    if (groupData.groupStatus === 'closed') {
+      throw new Error('This group is no longer active and cannot accept new members.');
+    }
+    
+    if (groupData.members?.includes(currentUser.uid)) {
+      throw new Error('You are already a member of this group');
+    }
+
+    // Add user to members array
+    const updatedMembers = [...(groupData.members || []), currentUser.uid];
+    await updateDoc(doc(db, 'groups', groupDoc.id), {
+      members: updatedMembers
+    });
+
+    // Optionally update user's groups array in Firestore
+    const userRef = doc(db, 'users', currentUser.uid);
+    await updateDoc(userRef, {
+      groups: arrayUnion(groupDoc.id)
+    });
+
+    return 'Successfully joined the group!';
+  } catch (error: any) {
+    console.error("Error joining group:", error);
+    throw error;
+  }
+};
+
+export const closeGroupFunction = async (currentUser: any) => {
+  try {
+    const groupsRef = collection(db, 'groups');
+    const q = query(
+      groupsRef, 
+      where('createdBy', '==', currentUser?.email), 
+      where('groupStatus', '==', 'active')
+    );
+    const querySnapshot = await getDocs(q);
+    
+    if (querySnapshot.empty) {
+      throw new Error('You do not have an active group to close.');
+    }
+    
+    const groupDoc = querySnapshot.docs[0];
+    const groupData = groupDoc.data();
+
+    if (groupData.createdBy !== currentUser?.email) {
+      throw new Error('You can only close your own groups.');
+    }
+
+    await updateDoc(doc(db, 'groups', groupDoc.id), {
+      groupStatus: 'closed',
+      members: []
+    });
+
+    return 'Group closed successfully.';
+  } catch (error: any) {
+    console.error("Error closing group:", error);
+    throw error;
+  }
+};
+
+export const leaveGroupFunction = async (currentUser: any) => {
+  try {
+    const groupsRef = collection(db, 'groups');
+    const q = query(
+      groupsRef, 
+      where('members', 'array-contains', currentUser?.uid), 
+      where('groupStatus', '==', 'active')
+    );
+    const querySnapshot = await getDocs(q);
+
+    if (!currentUser?.uid) {
+      throw new Error('You must be logged in to leave a group');
+    }
+    
+    if (querySnapshot.empty) {
+      throw new Error('You are not a member of any active group.');
+    }
+    
+    const groupDoc = querySnapshot.docs[0];
+    const groupData = groupDoc.data();
+
+    await updateDoc(doc(db, 'groups', groupDoc.id), {
+      members: groupData.members.filter((member: string) => member !== currentUser.uid)
+    });
+
+    // Remove group from user's groups array
+    const userRef = doc(db, 'users', currentUser.uid);
+    await updateDoc(userRef, {
+      groups: arrayRemove(groupDoc.id)
+    });
+
+    return 'You have successfully left your group.';
+  } catch (error: any) {
+    console.error("Error leaving group:", error);
+    throw error;
+  }
+  
 };

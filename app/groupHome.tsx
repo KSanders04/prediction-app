@@ -1,4 +1,4 @@
-// app/groupHome.tsx 
+// app/groupHome.tsx - REFACTORED VERSION using firebaseFunctions.tsx
 import React, { useState, useCallback, useEffect } from 'react';
 import {
   View,
@@ -11,36 +11,28 @@ import {
   StyleSheet,
 } from 'react-native';
 
-import { auth, db } from '../firebaseConfig';
-import { onAuthStateChanged } from 'firebase/auth';
+// Import from firebaseFunctions instead of direct Firebase imports
 import {
-  collection,
-  query,
-  where,
-  getDocs,
-  updateDoc,
-  doc,
-  getDoc,
-  addDoc,
-  onSnapshot,
-  orderBy,
-  limit,
-  Timestamp,
-  setDoc,
-  deleteDoc
-} from 'firebase/firestore';
+  checkUserGroupStatus,
+  listenToGroupChanges,
+  setGroupGame,
+  resetGroupLeaderboard,
+  updateGroupLeaderboardFromResults,
+  listenToGroupLeaderboard,
+  getAllActiveGames,
+  listenToActiveQuestions,
+  checkUserPrediction,
+  makeGroupPrediction,
+  listenToGuesses,
+  GroupData,
+} from '../components/firebaseFunctions';
+
+// Still need auth for user state
+import { auth } from '../firebaseConfig';
+import { onAuthStateChanged } from 'firebase/auth';
 import YoutubePlayer from 'react-native-youtube-iframe';
 
-interface Guess {
-  id: string;
-  prediction: string;
-  questionId: string;
-  playerId: string;
-  playerEmail?: string;
-  userName?: string;
-  timestamp: Timestamp;
-}
-
+// Define interfaces
 interface Game {
   id: string;
   name: string;
@@ -51,16 +43,25 @@ interface Game {
   createdAt: Date;
 }
 
-interface GroupData {
+interface Question {
   id: string;
-  code: string;
-  groupStatus: string;
+  gameId: string;
+  question: string;
+  options: string[];
+  status: "active" | "closed" | "finished";
+  actual_result: string;
+  createdAt: Date;
   createdBy: string;
-  members: string[];
-  groupName: string;
-  currentGameId?: string;
-  currentGameName?: string;
-  groupAdminID: string;
+}
+
+interface Guess {
+  id: string;
+  prediction: string;
+  questionId: string;
+  playerId: string;
+  playerEmail?: string;
+  userName?: string;
+  timestamp: any;
 }
 
 export default function GroupHome() {
@@ -92,7 +93,7 @@ export default function GroupHome() {
   // Cleanup functions for listeners
   const [unsubscribeFunctions, setUnsubscribeFunctions] = useState<Array<() => void>>([]);
 
-  // Authentication and group setup
+  // Authentication and group setup - using firebaseFunctions
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
@@ -128,130 +129,42 @@ export default function GroupHome() {
     setUnsubscribeFunctions(prev => [...prev, unsubscribe]);
   }, []);
 
-  // Group leaderboard update function
-  const updateGroupLeaderboard = async (userId: string, isCorrect: boolean) => {
-    if (!groupDocId) return;
-    
-    try {
-      // Create or update user's group stats
-      const groupStatsRef = doc(db, 'groupStats', `${groupDocId}_${userId}`);
-      const groupStatsSnap = await getDoc(groupStatsRef);
-      
-      if (groupStatsSnap.exists()) {
-        const currentStats = groupStatsSnap.data();
-        await updateDoc(groupStatsRef, {
-          totalPredictions: currentStats.totalPredictions + 1,
-          correctPredictions: isCorrect ? currentStats.correctPredictions + 1 : currentStats.correctPredictions,
-          totalPoints: isCorrect ? currentStats.totalPoints + 10 : currentStats.totalPoints,
-          lastPlayed: Timestamp.fromDate(new Date())
-        });
-      } else {
-        // Get user info for display
-        const userRef = doc(db, 'users', userId);
-        const userSnap = await getDoc(userRef);
-        const userData = userSnap.exists() ? userSnap.data() : {};
-        
-        await setDoc(groupStatsRef, {
-          userId: userId,
-          groupId: groupDocId,
-          userName: userData.userName || userData.email || `User_${userId.slice(0, 6)}`,
-          email: userData.email || '',
-          totalPredictions: 1,
-          correctPredictions: isCorrect ? 1 : 0,
-          totalPoints: isCorrect ? 10 : 0,
-          createdAt: Timestamp.fromDate(new Date()),
-          lastPlayed: Timestamp.fromDate(new Date())
-        });
-      }
-      
-      console.log(`📊 Updated group leaderboard for user ${userId}: ${isCorrect ? '+10 points' : 'no points'}`);
-      
-    } catch (error) {
-      console.error('Error updating group leaderboard:', error);
-    }
-  };
-
+  // Setup group data - using firebaseFunctions
   const setupGroupData = async (user: any) => {
     try {
       cleanupAllListeners();
       
-      const groupsRef = collection(db, 'groups');
-
-      // Check if user is admin
-      const adminQuery = query(
-        groupsRef,
-        where('groupStatus', '==', 'active'),
-        where('createdBy', '==', user.email)
-      );
-      const adminSnapshot = await getDocs(adminQuery);
-
-      if (!adminSnapshot.empty) {
-        const groupDoc = adminSnapshot.docs[0];
-        const groupDocData = groupDoc.data();
+      // Use firebaseFunctions instead of direct Firebase calls
+      const { isAdmin, groupData } = await checkUserGroupStatus(user.email, user.uid);
+      
+      if (groupData) {
+        console.log('🔧 User is group', isAdmin ? 'admin' : 'member');
         
-        console.log('🔧 User is group admin');
+        setGroupDocId(groupData.id);
+        setGroupCode(groupData.code || '');
+        setGroupMembers(groupData.members || []);
+        setIsGroupAdmin(isAdmin);
+        setGroupData(groupData);
         
-        setGroupDocId(groupDoc.id);
-        setGroupCode(groupDocData.code || '');
-        setGroupMembers(groupDocData.members || []);
-        setIsGroupAdmin(true);
-        
-        const groupInfo: GroupData = {
-          id: groupDoc.id,
-          ...groupDocData
-        } as GroupData;
-        setGroupData(groupInfo);
-        
-        // Set up group listener
-        const groupUnsubscribe = setupGroupListener(groupDoc.id);
+        // Set up group listener using firebaseFunctions
+        const groupUnsubscribe = listenToGroupChanges(groupData.id, handleGroupDataUpdate);
         addUnsubscribeFunction(groupUnsubscribe);
         
-        // Auto-select game if exists
-        if (groupDocData.currentGameId && groupDocData.currentGameName) {
-          console.log('🎮 Auto-selecting admin game:', groupDocData.currentGameName);
-          await selectGameForGroup(groupDocData.currentGameId, groupDocData.currentGameName, groupDocData.url);
-        }
+        // Set up group leaderboard listener using firebaseFunctions
+        const leaderboardUnsubscribe = listenToGroupLeaderboard(groupData.id, (leaderboard) => {
+          setGroupLeaderboard(leaderboard);
+          console.log(`📊 Group leaderboard updated: ${leaderboard.length} members`);
+        });
+        addUnsubscribeFunction(leaderboardUnsubscribe);
         
-      } else {
-        // Check if user is a member
-        const memberQuery = query(
-          groupsRef,
-          where('groupStatus', '==', 'active'),
-          where('members', 'array-contains', user.uid)
-        );
-        const memberSnapshot = await getDocs(memberQuery);
-
-        if (!memberSnapshot.empty) {
-          const groupDoc = memberSnapshot.docs[0];
-          const groupDocData = groupDoc.data();
-          
-          console.log('🔧 User is group member');
-          
-          setGroupDocId(groupDoc.id);
-          setGroupCode(groupDocData.code || '');
-          setGroupMembers(groupDocData.members || []);
-          setIsGroupAdmin(false);
-          
-          const groupInfo: GroupData = {
-            id: groupDoc.id,
-            ...groupDocData
-          } as GroupData;
-          setGroupData(groupInfo);
-          
-          // Set up group listener
-          const groupUnsubscribe = setupGroupListener(groupDoc.id);
-          addUnsubscribeFunction(groupUnsubscribe);
-          
-          // Auto-select game if exists
-          if (groupDocData.currentGameId && groupDocData.currentGameName) {
-            console.log('🎮 Auto-selecting member game:', groupDocData.currentGameName);
-            await selectGameForGroup(groupDocData.currentGameId, groupDocData.currentGameName, groupDocData.url);
-          }
-          
-        } else {
-          console.log('❌ User is not in any active group');
-          setIsGroupAdmin(false);
+        // Auto-select game if exists
+        if (groupData.currentGameId && groupData.currentGameName) {
+          console.log('🎮 Auto-selecting game:', groupData.currentGameName);
+          await selectGameForGroup(groupData.currentGameId, groupData.currentGameName, groupData.url);
         }
+      } else {
+        console.log('❌ User is not in any active group');
+        setIsGroupAdmin(false);
       }
     } catch (error) {
       console.error('Error setting up group data:', error);
@@ -259,34 +172,23 @@ export default function GroupHome() {
     }
   };
 
-  // Set up real-time listener for group changes
-  const setupGroupListener = (groupDocId: string) => {
-    console.log('📡 Setting up group listener');
+  // Handle group data updates
+  const handleGroupDataUpdate = useCallback(async (groupDocData: any) => {
+    console.log('🔄 Group data updated');
     
-    const groupDocRef = doc(db, 'groups', groupDocId);
+    setGroupMembers(groupDocData.members || []);
     
-    return onSnapshot(groupDocRef, async (doc) => {
-      if (doc.exists()) {
-        const groupDocData = doc.data();
-        console.log('🔄 Group data updated');
-        
-        setGroupMembers(groupDocData.members || []);
-        
-        // Check for game changes
-        if (groupDocData.currentGameId && groupDocData.currentGameName) {
-          if (groupDocData.currentGameId !== currentGameId) {
-            console.log('🎮 Group game changed to:', groupDocData.currentGameName);
-            await selectGameForGroup(groupDocData.currentGameId, groupDocData.currentGameName, groupDocData.url);
-          }
-        } else {
-          console.log('🚫 Group cleared game selection');
-          clearGameSelection();
-        }
+    // Check for game changes
+    if (groupDocData.currentGameId && groupDocData.currentGameName) {
+      if (groupDocData.currentGameId !== currentGameId) {
+        console.log('🎮 Group game changed to:', groupDocData.currentGameName);
+        await selectGameForGroup(groupDocData.currentGameId, groupDocData.currentGameName, groupDocData.url);
       }
-    }, (error) => {
-      console.error('❌ Error in group listener:', error);
-    });
-  };
+    } else {
+      console.log('🚫 Group cleared game selection');
+      clearGameSelection();
+    }
+  }, [currentGameId]);
 
   // Select game for the group
   const selectGameForGroup = async (gameId: string, gameName: string, gameUrl?: string) => {
@@ -296,17 +198,7 @@ export default function GroupHome() {
       setCurrentGameId(gameId);
       setCurrentGame(gameName);
       setPlayerSelectedGame(gameName);
-      
-      // Get game URL if not provided
-      if (!gameUrl) {
-        const gameDoc = await getDoc(doc(db, 'games', gameId));
-        if (gameDoc.exists()) {
-          const gameData = gameDoc.data();
-          setCurrentGameURL(gameData.url || '');
-        }
-      } else {
-        setCurrentGameURL(gameUrl);
-      }
+      setCurrentGameURL(gameUrl || '');
       
       console.log('✅ Game selected successfully');
       
@@ -332,49 +224,36 @@ export default function GroupHome() {
     setAllGuesses([]);
   };
 
-  // Listen for questions when game is selected
+  // Listen for questions when game is selected - using firebaseFunctions
   useEffect(() => {
     if (currentGameId && playerId) {
       console.log('🎯 Setting up question listener for game:', currentGameId);
       
-      const questionsQuery = query(
-        collection(db, "questions"),
-        where("gameId", "==", currentGameId),
-        where("status", "in", ["active", "closed", "finished"]),
-        orderBy("createdAt", "desc"),
-        limit(1)
-      );
-
-      const questionUnsubscribe = onSnapshot(questionsQuery, (snapshot) => {
-        console.log('📥 Question snapshot received, count:', snapshot.docs.length);
+      const questionUnsubscribe = listenToActiveQuestions(currentGameId, (question) => {
+        console.log('📥 Question snapshot received');
         
-        if (!snapshot.empty) {
-          const questionDoc = snapshot.docs[0];
-          const questionData = questionDoc.data();
+        if (question && question.gameId === currentGameId) {
+          console.log('✅ Found question:', question.question);
           
-          console.log('✅ Found question:', questionData.question);
+          setCurrentQuestionId(question.id);
+          setCurrentQuestion(question.question);
+          setQuestionOptions(question.options || []);
+          setCorrectAnswer(question.actual_result || 'Not set');
           
-          if (questionData.gameId === currentGameId) {
-            setCurrentQuestionId(questionDoc.id);
-            setCurrentQuestion(questionData.question);
-            setQuestionOptions(questionData.options || []);
-            setCorrectAnswer(questionData.actual_result || 'Not set');
+          if (question.status === "active") {
+            setPredictionStatus('Predictions OPEN');
+          } else if (question.status === "closed") {
+            setPredictionStatus('Predictions CLOSED');
+          } else if (question.status === "finished") {
+            setPredictionStatus('Results Available');
             
-            if (questionData.status === "active") {
-              setPredictionStatus('Predictions OPEN');
-            } else if (questionData.status === "closed") {
-              setPredictionStatus('Predictions CLOSED');
-            } else if (questionData.status === "finished") {
-              setPredictionStatus('Results Available');
-              
-              // When results are available, update group leaderboard
-              if (questionData.actual_result) {
-                updateGroupLeaderboardFromResults(questionDoc.id, questionData.actual_result);
-              }
+            // When results are available, update group leaderboard using firebaseFunctions
+            if (question.actual_result && groupDocId) {
+              updateGroupLeaderboardFromResults(question.id, question.actual_result, groupDocId);
             }
-            
-            checkUserPrediction(questionDoc.id);
           }
+          
+          checkUserPredictionWrapper(question.id);
         } else {
           console.log('❌ No questions found');
           setCurrentQuestionId(null);
@@ -385,8 +264,6 @@ export default function GroupHome() {
           setUserPrediction('');
           setAllGuesses([]);
         }
-      }, (error) => {
-        console.error('❌ Error in question listener:', error);
       });
 
       addUnsubscribeFunction(questionUnsubscribe);
@@ -395,155 +272,42 @@ export default function GroupHome() {
         questionUnsubscribe();
       };
     }
-  }, [currentGameId, playerId]);
+  }, [currentGameId, playerId, groupDocId]);
 
-  // Update group leaderboard when question results are available
-  const updateGroupLeaderboardFromResults = async (questionId: string, correctAnswer: string) => {
-    try {
-      console.log('📊 Updating group leaderboard from results');
-      
-      const guessesQuery = query(
-        collection(db, "guesses"),
-        where("questionId", "==", questionId)
-      );
-      const snapshot = await getDocs(guessesQuery);
-      
-      const updatePromises = snapshot.docs.map(doc => {
-        const guess = doc.data();
-        const isCorrect = guess.prediction === correctAnswer;
-        return updateGroupLeaderboard(guess.playerId, isCorrect);
-      });
-      
-      await Promise.all(updatePromises);
-      console.log('✅ Group leaderboard updated from results');
-      
-    } catch (error) {
-      console.error('Error updating group leaderboard from results:', error);
-    }
-  };
-  // Reset group leaderboard when new game is selected
-  const resetGroupLeaderboard = async () => {
-    if (!groupDocId) return;
-    
-    try {
-      console.log('🔄 Resetting group leaderboard for new game');
-      
-      // Get all current group stats for this group
-      const groupStatsQuery = query(
-        collection(db, 'groupStats'),
-        where('groupId', '==', groupDocId)
-      );
-      const snapshot = await getDocs(groupStatsQuery);
-      
-      // Delete all existing group stats
-      const deletePromises = snapshot.docs.map(doc => 
-        deleteDoc(doc.ref)
-      );
-      
-      await Promise.all(deletePromises);
-      console.log(`✅ Reset complete: Deleted ${snapshot.docs.length} leaderboard entries`);
-      
-    } catch (error) {
-      console.error('Error resetting group leaderboard:', error);
-    }
-  };
-
-  // Listen for guesses when question is active
+  // Listen for guesses when question is active - using firebaseFunctions
   useEffect(() => {
-    if (currentQuestionId) {
-      console.log('👥 Setting up guess listener');
-      
-      const guessesQuery = query(
-        collection(db, "guesses"),
-        where("questionId", "==", currentQuestionId),
-        orderBy("timestamp", "asc")
-      );
+    if (!currentQuestionId) return;
+    
+    console.log('👥 Setting up guess listener');
+    
+    const guessUnsubscribe = listenToGuesses(currentQuestionId, (guesses) => {
+      console.log(`👥 Updated guesses: ${guesses.length}`);
+      setAllGuesses(guesses);
+    });
 
-      const guessUnsubscribe = onSnapshot(guessesQuery, (snapshot) => {
-        const guesses: Guess[] = [];
-        snapshot.forEach((doc) => {
-          guesses.push({ id: doc.id, ...doc.data() } as Guess);
-        });
-        console.log(`👥 Updated guesses: ${guesses.length}`);
-        setAllGuesses(guesses);
-      });
-
-      addUnsubscribeFunction(guessUnsubscribe);
-      
-      return () => {
-        guessUnsubscribe();
-      };
-    }
+    addUnsubscribeFunction(guessUnsubscribe);
+    
+    return () => {
+      guessUnsubscribe();
+    };
   }, [currentQuestionId]);
 
-  // Set up group leaderboard listener
-  useEffect(() => {
-    if (groupDocId) {
-      console.log('📡 Setting up group leaderboard listener');
-      
-      const groupStatsQuery = query(
-        collection(db, 'groupStats'),
-        where('groupId', '==', groupDocId),
-        orderBy('totalPoints', 'desc')
-      );
-      
-      const unsubscribeGroupStats = onSnapshot(groupStatsQuery, (snapshot) => {
-        const leaderboard: any[] = [];
-        snapshot.forEach((doc) => {
-          leaderboard.push({ id: doc.id, ...doc.data() });
-        });
-        
-        setGroupLeaderboard(leaderboard);
-        console.log(`📊 Group leaderboard updated: ${leaderboard.length} members`);
-      });
-      
-      addUnsubscribeFunction(unsubscribeGroupStats);
-      
-      return () => unsubscribeGroupStats();
-    }
-  }, [groupDocId]);
-
-  // Check if user already made a prediction
-  const checkUserPrediction = useCallback(async (questionId: string) => {
+  // Check if user already made a prediction - using firebaseFunctions
+  const checkUserPredictionWrapper = useCallback(async (questionId: string) => {
     if (!playerId || !questionId) return;
     
     try {
-      const userGuessQuery = query(
-        collection(db, "guesses"),
-        where("questionId", "==", questionId),
-        where("playerId", "==", playerId)
-      );
-      
-      const snapshot = await getDocs(userGuessQuery);
-      
-      if (!snapshot.empty) {
-        const userGuess = snapshot.docs[0].data();
-        setUserPrediction(userGuess.prediction);
-      } else {
-        setUserPrediction('');
-      }
+      const prediction = await checkUserPrediction(questionId, playerId);
+      setUserPrediction(prediction);
     } catch (error) {
       console.error('Error checking user prediction:', error);
     }
   }, [playerId]);
 
-  // Fetch active games
+  // Fetch active games - using firebaseFunctions
   const fetchActiveGames = useCallback(async () => {
     try {
-      const gamesRef = collection(db, 'games');
-      const q = query(gamesRef, where('status', '==', 'active'));
-      const querySnapshot = await getDocs(q);
-
-      const games: Game[] = [];
-      querySnapshot.forEach((doc) => {
-        const data = doc.data();
-        games.push({
-          id: doc.id,
-          ...data,
-          createdAt: data.createdAt?.toDate() || new Date()
-        } as Game);
-      });
-
+      const games = await getAllActiveGames();
       setAllGames(games);
       console.log(`📋 Fetched ${games.length} active games`);
     } catch (error) {
@@ -555,7 +319,7 @@ export default function GroupHome() {
     fetchActiveGames();
   }, [fetchActiveGames]);
 
-  // Player prediction function
+  // Player prediction function - using firebaseFunctions
   const playerMakePrediction = useCallback(async (choice: string) => {
     if (!currentQuestionId) {
       Alert.alert('Error', 'No active question!');
@@ -580,40 +344,24 @@ export default function GroupHome() {
     try {
       console.log('🎯 Making prediction:', choice);
       
-      const guessQuery = query(
-        collection(db, "guesses"),
-        where("questionId", "==", currentQuestionId),
-        where("playerId", "==", playerId)
-      );
-      const guessSnapshot = await getDocs(guessQuery);
-
-      if (!guessSnapshot.empty) {
-        const guessDoc = guessSnapshot.docs[0];
-        await updateDoc(doc(db, "guesses", guessDoc.id), {
-          prediction: choice,
-          timestamp: Timestamp.fromDate(new Date())
-        });
-      } else {
-        await addDoc(collection(db, "guesses"), {
-          prediction: choice,
-          questionId: currentQuestionId,
-          playerId: playerId,
-          playerEmail: currentUser?.email || null,
-          userName: currentUser?.email || `Player_${playerId.slice(0, 6)}`,
-          timestamp: Timestamp.fromDate(new Date())
-        });
-      }
+      // Use firebaseFunctions for group prediction
+      await makeGroupPrediction({
+        questionId: currentQuestionId,
+        playerId: playerId,
+        playerEmail: currentUser?.email || null,
+        userName: currentUser?.email || `Player_${playerId.slice(0, 6)}`,
+        prediction: choice,
+      });
       
       setUserPrediction(choice);
       Alert.alert('Success', `Your prediction: ${choice} submitted!`);
       
-    } catch (error) {
-      console.error("Error submitting prediction:", error);
-      Alert.alert('Error', 'Failed to submit prediction');
+    } catch (error: any) {
+      Alert.alert('Error', error.message || 'Failed to submit prediction');
     }
   }, [currentQuestionId, predictionStatus, playerId, currentUser, userPrediction]);
 
-  // Update the joinGameButton function to include reset:
+  // Join game button - using firebaseFunctions
   const joinGameButton = useCallback(async (gameName: string) => {
     try {
       const selectedGame = allGames.find(game => game.name === gameName);
@@ -625,17 +373,20 @@ export default function GroupHome() {
       console.log('🎮 Setting group game to:', selectedGame.name);
       
       if (groupDocId) {
-        // First, reset the group leaderboard
-        await resetGroupLeaderboard();
+        // First, reset the group leaderboard using firebaseFunctions
+        const deletedCount = await resetGroupLeaderboard(groupDocId);
+        console.log('🔄 Resetting group leaderboard for new game');
+        console.log(`✅ Reset complete: Deleted ${deletedCount} leaderboard entries`);
         
-        // Then update the group with new game
-        await updateDoc(doc(db, 'groups', groupDocId), {
-          currentGameId: selectedGame.id,
-          currentGameName: selectedGame.name,
-          url: selectedGame.url || '',
-          lastGameUpdate: Timestamp.fromDate(new Date()),
-          updatedBy: currentUser?.email || playerId
-        });
+        // Then update the group with new game using firebaseFunctions
+        await setGroupGame(
+          groupDocId, 
+          selectedGame.id, 
+          selectedGame.name, 
+          selectedGame.url || '', 
+          currentUser?.email, 
+          playerId
+        );
         
         console.log('✅ Group game updated and leaderboard reset');
         Alert.alert('Success', `Group is now playing: ${gameName}\n\nLeaderboard has been reset to 0!\n\nAll members will see this game.`);
@@ -643,9 +394,8 @@ export default function GroupHome() {
         Alert.alert('Error', 'Group not found');
       }
       
-    } catch (error) {
-      console.error('❌ Error setting group game:', error);
-      Alert.alert('Error', 'Failed to set group game');
+    } catch (error: any) {
+      Alert.alert('Error', error.message || 'Failed to set group game');
     }
   }, [allGames, groupDocId, currentUser, playerId]);
 
@@ -998,7 +748,7 @@ export default function GroupHome() {
                 )}
               </View>
 
-              {/* Debug Info */}
+              {/* Debug Info - Remove in production */}
               <View style={styles.debugSection}>
                 <Text style={styles.debugTitle}>🔧 Debug Info</Text>
                 <Text style={styles.debugText}>Group Admin: {isGroupAdmin ? 'Yes' : 'No'}</Text>
@@ -1021,6 +771,7 @@ export default function GroupHome() {
   );
 }
 
+// Styles remain the same as your original groupHome.tsx
 const styles = StyleSheet.create({
   app: {
     flex: 1,

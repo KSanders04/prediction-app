@@ -4,19 +4,8 @@ import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { Timestamp } from 'firebase/firestore';
 import { listenForActivePlayers, formatTimeAgo } from './firebaseFunctions';
 
-interface ActivePlayer {
-  userId: string;
-  email: string;
-  gameId: string;
-  status: 'online' | 'offline';
-  isPlaying: boolean;
-  lastSeen: Timestamp;
-  joinedAt: Timestamp;
-}
 
-interface ActivePlayersProps {
-  currentGameId?: string | null;
-}
+import { ActivePlayer, ActivePlayersProps } from '@/types';
 
 export const ActivePlayers: React.FC<ActivePlayersProps> = ({ currentGameId }) => {
   const [activePlayers, setActivePlayers] = useState<ActivePlayer[]>([]);
