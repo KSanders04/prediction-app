@@ -39,7 +39,11 @@ const index = () => {
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >
+<<<<<<< HEAD
+            <Text style={styles.title} testID="sign-in-text">Sign In</Text>
+=======
             <Text style={styles.title}>Play By Play</Text>
+>>>>>>> 37b086daad3d7642a07577890da716b411c29fea
             <TextInput
               style={styles.textInput}
               placeholder="Email"
@@ -60,7 +64,7 @@ const index = () => {
               autoCapitalize="none"
               returnKeyType="done"
             />
-            <TouchableOpacity style={styles.button} onPress={handleSignIn} activeOpacity={0.8}>
+            <TouchableOpacity style={styles.button} onPress={handleSignIn} activeOpacity={0.8} testID="sign-in-button">
               <Text style={styles.text}>Sign In</Text>
             </TouchableOpacity>
 

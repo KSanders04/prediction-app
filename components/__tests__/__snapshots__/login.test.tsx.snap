@@ -1,0 +1,178 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`Login Component matches snapshot 1`] = `
+{
+  "children": [
+    {
+      "children": [
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "children": [
+                    "Sign In",
+                  ],
+                  "props": {},
+                  "type": "Text",
+                },
+                {
+                  "children": null,
+                  "props": {
+                    "autoCapitalize": "none",
+                    "keyboardType": "email-address",
+                    "onChangeText": [Function],
+                    "placeholder": "Email",
+                    "placeholderTextColor": "#3C4858",
+                    "returnKeyType": "next",
+                    "value": "",
+                  },
+                  "type": "TextInput",
+                },
+                {
+                  "children": null,
+                  "props": {
+                    "autoCapitalize": "none",
+                    "onChangeText": [Function],
+                    "placeholder": "Password",
+                    "placeholderTextColor": "#3C4858",
+                    "returnKeyType": "done",
+                    "secureTextEntry": true,
+                    "value": "",
+                  },
+                  "type": "TextInput",
+                },
+                {
+                  "children": [
+                    {
+                      "children": [
+                        "Sign In",
+                      ],
+                      "props": {},
+                      "type": "Text",
+                    },
+                  ],
+                  "props": {
+                    "accessibilityState": {
+                      "busy": undefined,
+                      "checked": undefined,
+                      "disabled": undefined,
+                      "expanded": undefined,
+                      "selected": undefined,
+                    },
+                    "accessibilityValue": {
+                      "max": undefined,
+                      "min": undefined,
+                      "now": undefined,
+                      "text": undefined,
+                    },
+                    "accessible": true,
+                    "collapsable": false,
+                    "focusable": true,
+                    "onClick": [Function],
+                    "onResponderGrant": [Function],
+                    "onResponderMove": [Function],
+                    "onResponderRelease": [Function],
+                    "onResponderTerminate": [Function],
+                    "onResponderTerminationRequest": [Function],
+                    "onStartShouldSetResponder": [Function],
+                  },
+                  "type": "View",
+                },
+                {
+                  "children": [
+                    {
+                      "children": [
+                        "Don't have an account?",
+                      ],
+                      "props": {},
+                      "type": "Text",
+                    },
+                    {
+                      "children": [
+                        {
+                          "children": [
+                            " Create Account",
+                          ],
+                          "props": {},
+                          "type": "Text",
+                        },
+                      ],
+                      "props": {
+                        "accessibilityState": {
+                          "busy": undefined,
+                          "checked": undefined,
+                          "disabled": undefined,
+                          "expanded": undefined,
+                          "selected": undefined,
+                        },
+                        "accessibilityValue": {
+                          "max": undefined,
+                          "min": undefined,
+                          "now": undefined,
+                          "text": undefined,
+                        },
+                        "accessible": true,
+                        "collapsable": false,
+                        "focusable": true,
+                        "onClick": [Function],
+                        "onResponderGrant": [Function],
+                        "onResponderMove": [Function],
+                        "onResponderRelease": [Function],
+                        "onResponderTerminate": [Function],
+                        "onResponderTerminationRequest": [Function],
+                        "onStartShouldSetResponder": [Function],
+                      },
+                      "type": "View",
+                    },
+                  ],
+                  "props": {},
+                  "type": "View",
+                },
+              ],
+              "props": {},
+              "type": "View",
+            },
+          ],
+          "props": {
+            "accessibilityElementsHidden": undefined,
+            "accessibilityLiveRegion": undefined,
+            "accessibilityState": {
+              "busy": undefined,
+              "checked": undefined,
+              "disabled": undefined,
+              "expanded": undefined,
+              "selected": undefined,
+            },
+            "accessible": false,
+            "contentContainerStyle": {
+              "alignItems": "center",
+              "flexGrow": 1,
+              "justifyContent": "center",
+              "paddingBottom": 40,
+            },
+            "focusable": true,
+            "importantForAccessibility": undefined,
+            "keyboardShouldPersistTaps": "handled",
+            "onClick": [Function],
+            "onResponderGrant": [Function],
+            "onResponderMove": [Function],
+            "onResponderRelease": [Function],
+            "onResponderTerminate": [Function],
+            "onResponderTerminationRequest": [Function],
+            "onStartShouldSetResponder": [Function],
+            "showsVerticalScrollIndicator": false,
+          },
+          "type": "RCTScrollView",
+        },
+      ],
+      "props": {
+        "onLayout": [Function],
+      },
+      "type": "View",
+    },
+  ],
+  "props": {},
+  "type": "RCTSafeAreaView",
+}
+`;
