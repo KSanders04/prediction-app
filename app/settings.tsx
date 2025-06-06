@@ -74,9 +74,13 @@ export default function ModalScreen() {
     }
   };
 
+  const handleComingSoon = (feature: string) => {
+    Alert.alert(`${feature}`, 'Coming soon!');
+  };
+
   return (
     <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
-      <Text style={styles.title}>⚙️Settings</Text>
+      <Text style={styles.title}>⚙️ Settings</Text>
 
       <View style={styles.section}>
         <Text style={styles.label}>Username</Text>
@@ -115,6 +119,27 @@ export default function ModalScreen() {
         <Text style={styles.label}>Password</Text>
         <TouchableOpacity onPress={() => router.replace('/changePasswordPage')}>
           <Text style={styles.editLink}>Change</Text>
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.label}>Notifications</Text>
+        <TouchableOpacity onPress={() => handleComingSoon('Notifications')}>
+          <Text style={styles.editLink}>Configure</Text>
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.label}>Theme</Text>
+        <TouchableOpacity onPress={() => handleComingSoon('Theme Customization')}>
+          <Text style={styles.editLink}>Light / Dark</Text>
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.label}>Privacy</Text>
+        <TouchableOpacity onPress={() => handleComingSoon('Privacy Settings')}>
+          <Text style={styles.editLink}>Manage</Text>
         </TouchableOpacity>
       </View>
 
