@@ -353,6 +353,8 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#2c3e50',
     paddingTop: 10,
+    marginTop: -10,
+    marginBottom: -5,
   },
   id: {
     fontSize: 14,
