@@ -7,7 +7,7 @@ import * as ImagePicker from 'expo-image-picker';
 import SignOut from '../../components/signout';
 import { ProfileStats } from '../../components/profileStats';
 import { useNavigation } from '@react-navigation/native';
-import { User } from '@/types'; // Import User type
+import { User } from '@/types';
 import {
   fetchUserData,
   uploadProfileImage,

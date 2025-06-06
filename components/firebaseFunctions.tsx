@@ -1470,5 +1470,5 @@ export const makeGroupPrediction = async (predictionData: {
     throw error;
   }
 };
-export { GroupData /*---- AUTHENTICATION FIREBASE/LOGIC ----*/ };
+export { GroupData};
 

@@ -3,6 +3,7 @@ import { router } from "expo-router";
 import React, { useEffect, useState, useCallback } from "react";
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from '../../firebaseConfig';
+
 import { Group } from '@/types';
 import {
   fetchActiveGroup,

@@ -45,6 +45,10 @@ export default function TabLayout() {
       />
       <Tabs.Screen
         name="leaderboard"
+<<<<<<< Updated upstream
+=======
+
+>>>>>>> Stashed changes
         options={{
           title: 'Leaderboard',
           tabBarIcon: ({ color }) => <TabBarIcon name="trophy" color={color} />,
