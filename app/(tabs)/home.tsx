@@ -42,44 +42,7 @@ import { router } from 'expo-router';
 import YoutubePlayer from 'react-native-youtube-iframe';
 
 // Define interfaces for type safety
-interface Game {
-  id: string;
-  name: string;
-  status: string;
-  createdBy: string;
-  url?: string;
-  videoId?: string;
-  createdAt: Date;
-}
-
-interface Question {
-  id: string;
-  gameId: string;
-  question: string;
-  options: string[];
-  status: "active" | "closed" | "finished";
-  actual_result: string;
-  createdAt: Date;
-  createdBy: string;
-}
-
-interface Guess {
-  id: string;
-  prediction: string;
-  questionId: string;
-  playerId: string;
-  playerEmail?: string;
-  timestamp: any;
-}
-
-interface QuestionTemplate {
-  id: string;
-  text: string;
-  options: Array<{ optionText: string }>;
-  type: string;
-  createdAt?: Date;
-  updatedAt?: Date;
-}
+import { Game, QuestionTemplate, Guess ,} from '@/types';
 
 export default function Home() {
   // State variables - same as before
