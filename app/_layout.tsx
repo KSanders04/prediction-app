@@ -80,7 +80,7 @@ function RootLayoutNav() {
             />
           <Stack.Screen name="changePasswordPage" options={{ headerShown: false }} />
           <Stack.Screen 
-            name="modal" 
+            name="settings" 
             options={{ 
               title: 'Settings', 
               presentation: 'modal', 
