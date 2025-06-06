@@ -60,7 +60,7 @@ const index = () => {
               autoCapitalize="none"
               returnKeyType="done"
             />
-            <TouchableOpacity style={styles.button} onPress={handleSignIn} activeOpacity={0.8}>
+            <TouchableOpacity style={styles.button} onPress={handleSignIn} activeOpacity={0.8} testID="sign-in-button">
               <Text style={styles.text}>Sign In</Text>
             </TouchableOpacity>
 

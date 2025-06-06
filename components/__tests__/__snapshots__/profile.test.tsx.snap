@@ -1,0 +1,473 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`Profile Screen matches snapshot 1`] = `
+<RCTScrollView
+  contentContainerStyle={
+    {
+      "alignItems": "center",
+      "justifyContent": "flex-start",
+    }
+  }
+  style={
+    {
+      "backgroundColor": "#f5f7fa",
+      "flex": 1,
+      "padding": 20,
+      "paddingTop": 60,
+    }
+  }
+>
+  <View>
+    <View
+      accessibilityState={
+        {
+          "busy": undefined,
+          "checked": undefined,
+          "disabled": undefined,
+          "expanded": undefined,
+          "selected": undefined,
+        }
+      }
+      accessibilityValue={
+        {
+          "max": undefined,
+          "min": undefined,
+          "now": undefined,
+          "text": undefined,
+        }
+      }
+      accessible={true}
+      collapsable={false}
+      focusable={true}
+      onClick={[Function]}
+      onResponderGrant={[Function]}
+      onResponderMove={[Function]}
+      onResponderRelease={[Function]}
+      onResponderTerminate={[Function]}
+      onResponderTerminationRequest={[Function]}
+      onStartShouldSetResponder={[Function]}
+      style={
+        {
+          "opacity": 1,
+        }
+      }
+    >
+      <Image
+        source={
+          {
+            "testUri": "../../../assets/images/head_alizarin.png",
+          }
+        }
+        style={
+          {
+            "backgroundColor": "#ecf0f1",
+            "borderRadius": 60,
+            "height": 120,
+            "justifyContent": "center",
+            "marginBottom": 10,
+            "marginTop": -55,
+            "width": 120,
+          }
+        }
+      />
+    </View>
+    <View
+      style={
+        {
+          "alignItems": "flex-start",
+          "marginBottom": -10,
+        }
+      }
+    >
+      <Text
+        style={
+          {
+            "color": "#2c3e50",
+            "fontSize": 24,
+            "fontWeight": "bold",
+            "paddingTop": 10,
+          }
+        }
+      >
+         
+      </Text>
+    </View>
+    <View
+      style={
+        [
+          {
+            "flexDirection": "row",
+            "justifyContent": "center",
+          },
+          {
+            "marginBottom": -10,
+            "marginTop": 35,
+          },
+        ]
+      }
+    >
+      <View
+        accessibilityState={
+          {
+            "busy": undefined,
+            "checked": undefined,
+            "disabled": undefined,
+            "expanded": undefined,
+            "selected": undefined,
+          }
+        }
+        accessibilityValue={
+          {
+            "max": undefined,
+            "min": undefined,
+            "now": undefined,
+            "text": undefined,
+          }
+        }
+        accessible={true}
+        collapsable={false}
+        focusable={true}
+        onClick={[Function]}
+        onResponderGrant={[Function]}
+        onResponderMove={[Function]}
+        onResponderRelease={[Function]}
+        onResponderTerminate={[Function]}
+        onResponderTerminationRequest={[Function]}
+        onStartShouldSetResponder={[Function]}
+        style={
+          {
+            "alignSelf": "center",
+            "backgroundColor": "#3498db",
+            "borderRadius": 5,
+            "height": 32,
+            "justifyContent": "center",
+            "marginLeft": 10,
+            "opacity": 1,
+            "paddingHorizontal": 12,
+            "paddingVertical": 6,
+          }
+        }
+      >
+        <Text
+          style={
+            {
+              "color": "#fff",
+              "fontSize": 14,
+              "fontWeight": "600",
+            }
+          }
+        >
+          Edit Username
+        </Text>
+      </View>
+      <View
+        accessibilityState={
+          {
+            "busy": undefined,
+            "checked": undefined,
+            "disabled": undefined,
+            "expanded": undefined,
+            "selected": undefined,
+          }
+        }
+        accessibilityValue={
+          {
+            "max": undefined,
+            "min": undefined,
+            "now": undefined,
+            "text": undefined,
+          }
+        }
+        accessible={true}
+        collapsable={false}
+        focusable={true}
+        onClick={[Function]}
+        onResponderGrant={[Function]}
+        onResponderMove={[Function]}
+        onResponderRelease={[Function]}
+        onResponderTerminate={[Function]}
+        onResponderTerminationRequest={[Function]}
+        onStartShouldSetResponder={[Function]}
+        style={
+          {
+            "alignSelf": "center",
+            "backgroundColor": "#3498db",
+            "borderRadius": 5,
+            "height": 32,
+            "justifyContent": "center",
+            "marginLeft": 10,
+            "opacity": 1,
+            "paddingHorizontal": 12,
+            "paddingVertical": 6,
+          }
+        }
+      >
+        <Text
+          style={
+            {
+              "color": "#fff",
+              "fontSize": 14,
+              "fontWeight": "600",
+            }
+          }
+        >
+          Change Password
+        </Text>
+      </View>
+    </View>
+    <View
+      style={
+        {
+          "flexDirection": "row",
+          "justifyContent": "center",
+          "marginBottom": -10,
+          "marginTop": 20,
+        }
+      }
+    >
+      <View
+        style={
+          {
+            "alignItems": "center",
+            "marginHorizontal": 15,
+          }
+        }
+      >
+        <Text
+          style={
+            {
+              "color": "#2c3e50",
+              "fontSize": 18,
+              "fontWeight": "bold",
+              "marginTop": 10,
+            }
+          }
+        >
+          0
+        </Text>
+        <Text
+          style={
+            {
+              "color": "black",
+              "fontSize": 14,
+            }
+          }
+        >
+          Friends
+        </Text>
+      </View>
+      <View
+        style={
+          {
+            "alignItems": "center",
+            "marginHorizontal": 15,
+          }
+        }
+      >
+        <Text
+          style={
+            {
+              "color": "#2c3e50",
+              "fontSize": 18,
+              "fontWeight": "bold",
+              "marginTop": 10,
+            }
+          }
+        >
+          0
+        </Text>
+        <Text
+          style={
+            {
+              "color": "black",
+              "fontSize": 14,
+            }
+          }
+        >
+          Groups
+        </Text>
+      </View>
+    </View>
+    <View
+      style={
+        {
+          "marginTop": 10,
+          "width": "100%",
+        }
+      }
+    >
+      <View
+        style={
+          {
+            "backgroundColor": "white",
+            "borderLeftColor": "#3498db",
+            "borderLeftWidth": 4,
+            "borderRadius": 15,
+            "elevation": 5,
+            "margin": 20,
+            "padding": 20,
+            "shadowColor": "#000",
+            "shadowOffset": {
+              "height": 2,
+              "width": 0,
+            },
+            "shadowOpacity": 0.1,
+            "shadowRadius": 8,
+          }
+        }
+      >
+        <Text
+          style={
+            {
+              "color": "#2c3e50",
+              "fontSize": 20,
+              "fontWeight": "bold",
+              "marginBottom": 15,
+            }
+          }
+        >
+          📊 Your Stats
+        </Text>
+        <View
+          style={
+            {
+              "alignItems": "center",
+              "marginBottom": 15,
+            }
+          }
+        >
+          <Text
+            style={
+              {
+                "color": "#2c3e50",
+                "fontSize": 18,
+                "fontWeight": "600",
+              }
+            }
+          >
+            User_undefined
+          </Text>
+        </View>
+        <View
+          style={
+            {
+              "flexDirection": "row",
+              "flexWrap": "wrap",
+              "justifyContent": "space-between",
+              "marginBottom": 15,
+            }
+          }
+        >
+          <View
+            style={
+              {
+                "alignItems": "center",
+                "backgroundColor": "#f8f9fa",
+                "borderRadius": 12,
+                "marginBottom": 10,
+                "padding": 15,
+                "width": "48%",
+              }
+            }
+          >
+            <Text
+              style={
+                {
+                  "color": "#2c3e50",
+                  "fontSize": 24,
+                  "fontWeight": "bold",
+                }
+              }
+            >
+              %
+            </Text>
+            <Text
+              style={
+                {
+                  "color": "#7f8c8d",
+                  "fontSize": 12,
+                  "marginTop": 4,
+                  "textAlign": "center",
+                }
+              }
+            >
+              Accuracy
+            </Text>
+          </View>
+          <View
+            style={
+              {
+                "alignItems": "center",
+                "backgroundColor": "#f8f9fa",
+                "borderRadius": 12,
+                "marginBottom": 10,
+                "padding": 15,
+                "width": "48%",
+              }
+            }
+          >
+            <Text
+              style={
+                {
+                  "color": "#2c3e50",
+                  "fontSize": 24,
+                  "fontWeight": "bold",
+                }
+              }
+            >
+              0
+            </Text>
+            <Text
+              style={
+                {
+                  "color": "#7f8c8d",
+                  "fontSize": 12,
+                  "marginTop": 4,
+                  "textAlign": "center",
+                }
+              }
+            >
+              Games Played
+            </Text>
+          </View>
+        </View>
+        <View
+          style={
+            {
+              "borderTopColor": "#ecf0f1",
+              "borderTopWidth": 1,
+              "paddingTop": 15,
+            }
+          }
+        >
+          <Text
+            style={
+              {
+                "color": "#34495e",
+                "fontSize": 14,
+                "marginBottom": 5,
+              }
+            }
+          >
+            ✅ Correct Predictions: 
+            0
+             / 
+            0
+          </Text>
+          <Text
+            style={
+              {
+                "color": "#34495e",
+                "fontSize": 14,
+                "marginBottom": 5,
+              }
+            }
+          >
+            🕐 Last Played: 
+          </Text>
+        </View>
+      </View>
+    </View>
+  </View>
+</RCTScrollView>
+`;
