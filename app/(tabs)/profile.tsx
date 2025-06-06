@@ -1,18 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import {
   StyleSheet, View, Text, Image, TouchableOpacity, ActivityIndicator, Alert,
-  ScrollView, TextInput
+  ScrollView,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
-import SignOut from '../../components/signout';
 import { ProfileStats } from '../../components/profileStats';
-import { useNavigation } from '@react-navigation/native';
 import { User } from '@/types'; // Import User type
 import {
   fetchUserData,
   uploadProfileImage,
-  updateUsername,
-  changePassword,
   getCurrentUser,
   getCurrentUserRank,
   getRankSuffix,
@@ -20,13 +16,7 @@ import {
   formatLastPlayed
 } from '../../components/firebaseFunctions';
 
-type Navigation = {
-  navigate: (screen: string) => void;
-};
-
 export default function Profile() {
-  const navigation = useNavigation<Navigation>();
-
   // Update userData to match User type
   const [userData, setUserData] = useState<User>({
     id: '',
@@ -46,16 +36,10 @@ export default function Profile() {
   
   const [uploading, setUploading] = useState(false);
   const [authUser, setAuthUser] = useState<any>(null);
-  const [editingUsername, setEditingUsername] = useState(false);
-  const [newUsername, setNewUsername] = useState('');
-  const [changingPassword, setChangingPassword] = useState(false);
-  const [currentPassword, setCurrentPassword] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
 
   useEffect(() => {
     const getUserData = async () => {
-      const user = await getCurrentUser();
+      const user = getCurrentUser();
       if (!user) return;
       setAuthUser(user);
       const data = await fetchUserData(user.uid);
@@ -103,7 +87,7 @@ export default function Profile() {
   const handleUploadImage = async (uri: string) => {
     try {
       setUploading(true);
-      const user = await getCurrentUser();
+      const user = getCurrentUser();
       if (!user) return;
       const downloadURL = await uploadProfileImage(user.uid, uri);
       setUserData((prev) => ({ ...prev, profilePic: downloadURL }));
@@ -112,58 +96,6 @@ export default function Profile() {
       Alert.alert("Upload failed", "Could not upload image. Try again.");
     } finally {
       setUploading(false);
-    }
-  };
-
-  // Username update
-  const handleUsernameUpdate = async () => {
-    if (!newUsername.trim()) {
-      Alert.alert('Invalid Username', 'Username cannot be empty.');
-      return;
-    }
-    try {
-      const user = await getCurrentUser();
-      if (!user) return;
-      await updateUsername(user.uid, newUsername.trim());
-      setUserData((prev) => ({ ...prev, userName: newUsername.trim() }));
-      setEditingUsername(false);
-      Alert.alert('Success', 'Username updated!');
-    } catch (err) {
-      Alert.alert('Error', 'Could not update username.');
-    }
-  };
-
-  // Password change
-  const handleChangePassword = async () => {
-    if (!currentPassword || !newPassword || !confirmPassword) {
-      Alert.alert('Error', 'Please fill in all fields.');
-      return;
-    }
-    if (newPassword.length < 6) {
-      Alert.alert('Error', 'Password must be at least 6 characters long.');
-      return;
-    }
-    if (newPassword !== confirmPassword) {
-      Alert.alert('Error', 'New passwords do not match.');
-      return;
-    }
-    try {
-      const user = await getCurrentUser();
-      if (!user || !user.email) {
-        Alert.alert('Error', 'No authenticated user.');
-        return;
-      }
-      await changePassword(currentPassword, newPassword);
-      Alert.alert('Success', 'Password updated!');
-      setChangingPassword(false);
-      setCurrentPassword('');
-      setNewPassword('');
-      setConfirmPassword('');
-    } catch (error: any) {
-      let msg = 'Could not change password.';
-      if (error.code === 'auth/wrong-password') msg = 'Current password is incorrect.';
-      if (error.code === 'auth/weak-password') msg = 'Password must be at least 6 characters.';
-      Alert.alert('Error', msg);
     }
   };
 
@@ -193,91 +125,6 @@ export default function Profile() {
             <Text style={styles.name}>{userData.firstName} {userData.lastName}</Text>
           </View>
 
-          {/* Edit Username & Change Password */}
-          <View style={[styles.statsContainer, { marginTop: 35, marginBottom: -10 }]}>
-            <TouchableOpacity
-              style={styles.editUsernameButton}
-              onPress={() => {
-                setNewUsername(userData.userName || '');
-                setEditingUsername(true);
-              }}
-            >
-              <Text style={styles.editUsernameButtonText}>Edit Username</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.editUsernameButton}
-              onPress={() => navigation.navigate('changePasswordPage')}
-            >
-              <Text style={styles.editUsernameButtonText}>Change Password</Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Edit Username Modal */}
-          {editingUsername && (
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 20, marginBottom: -20 }}>
-              <TextInput
-                style={styles.usernameInput}
-                value={newUsername}
-                onChangeText={setNewUsername}
-                placeholder="Enter new username"
-                autoFocus
-              />
-              <TouchableOpacity style={styles.saveButton} onPress={handleUsernameUpdate}>
-                <Text style={styles.saveButtonText}>Save</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.cancelButton} onPress={() => setEditingUsername(false)}>
-                <Text style={styles.cancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-
-          {/* Change Password Modal */}
-          {changingPassword && (
-            <View style={{ flexDirection: 'column', alignItems: 'center', marginTop: 20 }}>
-              <TextInput
-                style={styles.usernameInput}
-                value={currentPassword}
-                onChangeText={setCurrentPassword}
-                placeholder="Current Password"
-                secureTextEntry
-                autoFocus
-              />
-              <TextInput
-                style={[styles.usernameInput, { marginTop: 10 }]}
-                value={newPassword}
-                onChangeText={setNewPassword}
-                placeholder="New Password"
-                secureTextEntry
-              />
-              <TextInput
-                style={[styles.usernameInput, { marginTop: 10 }]}
-                value={confirmPassword}
-                onChangeText={setConfirmPassword}
-                placeholder="Confirm New Password"
-                secureTextEntry
-              />
-              <View style={{ flexDirection: 'row', marginTop: 10 }}>
-                <TouchableOpacity
-                  style={styles.saveButton}
-                  onPress={handleChangePassword}
-                >
-                  <Text style={styles.saveButtonText}>Save</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.cancelButton}
-                  onPress={() => {
-                    setChangingPassword(false);
-                    setCurrentPassword('');
-                    setNewPassword('');
-                    setConfirmPassword('');
-                  }}
-                >
-                  <Text style={styles.cancelButtonText}>Cancel</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          )}
-
           {/* Friends & Groups Stats */}
           <View style={{ flexDirection: 'row', justifyContent: 'center', marginTop: 20, marginBottom: -10 }}>
             <View style={styles.statBox}>
@@ -303,7 +150,6 @@ export default function Profile() {
               formatLastPlayed={formatLastPlayed}
             />
           </View>
-          <SignOut />
         </>
       )}
     </ScrollView>

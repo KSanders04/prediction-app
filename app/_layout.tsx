@@ -5,6 +5,8 @@ import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
 import 'react-native-reanimated';
+import Colors from '@/constants/Colors';
+import { useClientOnlyValue } from '@/components/useClientOnlyValue';
 
 import { useColorScheme } from '@/components/useColorScheme';
 
@@ -77,7 +79,12 @@ function RootLayoutNav() {
               }} 
             />
           <Stack.Screen name="changePasswordPage" options={{ headerShown: false }} />
-          <Stack.Screen name="modal" options={{ title: 'Settings', presentation: 'modal' }} />
+          <Stack.Screen 
+            name="modal" 
+            options={{ 
+              title: 'Settings', 
+              presentation: 'modal', 
+            }}/>
       </Stack>
     </ThemeProvider>
   );

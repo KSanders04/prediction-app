@@ -1,10 +1,9 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, Alert, StyleSheet } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
 import { changePassword } from '../components/firebaseFunctions';
+import { router } from 'expo-router';
 
 export default function ChangePasswordPage() {
-  const navigation = useNavigation();
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -34,7 +33,7 @@ export default function ChangePasswordPage() {
       await changePassword(currentPassword, newPassword);
       Alert.alert('Success', 'Password updated!');
       resetFields();
-      navigation.goBack();
+      router.back();
     } catch (error: any) {
       let msg = 'Could not change password.';
       if (error.code === 'auth/wrong-password') msg = 'Current password is incorrect.';
@@ -88,7 +87,7 @@ export default function ChangePasswordPage() {
           style={styles.cancelButton}
           onPress={() => {
             resetFields();
-            navigation.goBack();
+            router.back();
           }}
           disabled={loading}
         >
