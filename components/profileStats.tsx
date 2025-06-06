@@ -12,16 +12,6 @@ export const ProfileStats: React.FC<ProfileStatsProps>
 }) => (
   <View style={styles.currentUserSection}>
    <Text style={styles.sectionTitle}>📊 Your Stats</Text>
-
-<View style={styles.nameContainer}>
-  <Text style={styles.nameText}>
-    {currentUser.userName || authUser?.email || `User_${authUser?.uid?.slice(0, 6)}`}
-  </Text>
-  {currentUser.userName && (
-  <Text style={styles.usernameText}>@{currentUser.userName}</Text>
-)}
-
-</View>
     <View style={styles.statsGrid}>
       <View style={styles.statCard}>
         <Text style={styles.statValue}>

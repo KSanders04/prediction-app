@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { ProfileStats } from '../../components/profileStats';
-import { User } from '@/types'; // Import User type
+import { User } from '@/types';
 import {
   fetchUserData,
   uploadProfileImage,
@@ -17,7 +17,6 @@ import {
 } from '../../components/firebaseFunctions';
 
 export default function Profile() {
-  // Update userData to match User type
   const [userData, setUserData] = useState<User>({
     id: '',
     name: '',
@@ -33,7 +32,7 @@ export default function Profile() {
     groups: [],
     email: '',
   });
-  
+
   const [uploading, setUploading] = useState(false);
   const [authUser, setAuthUser] = useState<any>(null);
 
@@ -44,7 +43,6 @@ export default function Profile() {
       setAuthUser(user);
       const data = await fetchUserData(user.uid);
       if (data) {
-        // Map the fetched data to match User type
         setUserData({
           id: user.uid,
           name: data.name || `${data.firstName || ''} ${data.lastName || ''}`.trim() || `User_${user.uid.slice(0, 6)}`,
@@ -65,7 +63,6 @@ export default function Profile() {
     getUserData();
   }, []);
 
-  // Image picker and upload
   const pickImageAndUpload = async () => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
@@ -100,47 +97,34 @@ export default function Profile() {
   };
 
   return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={{ alignItems: 'center', justifyContent: 'flex-start' }}
-    >
+    <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
       {uploading ? (
-        <ActivityIndicator size="large" color="#3498db" />
+        <ActivityIndicator size="large" color="#3949AB" />
       ) : (
         <>
-          {/* Profile Picture */}
-          <TouchableOpacity onPress={pickImageAndUpload}>
+          <TouchableOpacity onPress={pickImageAndUpload} style={styles.imageWrapper}>
             <Image
-              source={
-                userData.profilePic
-                  ? { uri: userData.profilePic }
-                  : require('../../assets/images/head_alizarin.png')
-              }
+              source={userData.profilePic ? { uri: userData.profilePic } : require('../../assets/images/head_alizarin.png')}
               style={styles.profileImage}
             />
+            <Text style={styles.changePhotoText}>Change Photo</Text>
           </TouchableOpacity>
 
-          {/* Name */}
-          <View style={{ alignItems: 'flex-start', marginBottom: -10 }}>
-            <Text style={styles.name}>{userData.firstName} {userData.lastName}</Text>
-          </View>
+          <Text style={styles.name}>{userData.firstName} {userData.lastName}</Text>
+          <Text style={styles.username}>@{userData.userName}</Text>
 
-          {/* Friends & Groups Stats */}
-          <View style={{ flexDirection: 'row', justifyContent: 'center', marginTop: 20, marginBottom: -10 }}>
+          <View style={styles.statsRow}>
             <View style={styles.statBox}>
               <Text style={styles.statNumber}>0</Text>
               <Text style={styles.statLabel}>Friends</Text>
             </View>
             <View style={styles.statBox}>
-              <Text style={styles.statNumber}>
-                {userData.groups ? userData.groups.length : 0}
-              </Text>
+              <Text style={styles.statNumber}>{userData.groups ? userData.groups.length : 0}</Text>
               <Text style={styles.statLabel}>Groups</Text>
             </View>
           </View>
 
-          {/* Profile Stats - Now properly typed */}
-          <View style={{ marginTop: 10, width: '100%' }}>
+          <View style={styles.statsContainer}>
             <ProfileStats
               currentUser={userData}
               authUser={authUser}
@@ -163,101 +147,61 @@ Profile.navigationOptions = {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f7fa',
-    padding: 20,
+    backgroundColor: '#f9fafe',
+  },
+  scrollContent: {
+    alignItems: 'center',
     paddingTop: 60,
+    paddingBottom: 60,
+  },
+  imageWrapper: {
+    alignItems: 'center',
+    marginBottom: 15,
   },
   profileImage: {
     width: 120,
     height: 120,
     borderRadius: 60,
-    marginBottom: 10,
-    justifyContent: 'center',
-    backgroundColor: '#ecf0f1',
-    marginTop: -55,
+    backgroundColor: '#e0e0e0',
   },
-  statsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-  },
-  statBox: {
-    alignItems: 'center',
-    marginHorizontal: 15,
-  },
-  statNumber: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#2c3e50',
-    marginTop: 10,
-  },
-  statLabel: {
+  changePhotoText: {
+    marginTop: 8,
+    color: '#5C6BC0',
     fontSize: 14,
-    color: 'black',
+    fontWeight: '600',
   },
   name: {
     fontSize: 24,
-    fontWeight: 'bold',
+    fontWeight: '700',
     color: '#2c3e50',
-    paddingTop: 10,
+    marginTop: 10,
   },
-  id: {
-    fontSize: 14,
+  username: {
+    fontSize: 16,
     color: '#7f8c8d',
-    marginBottom: 30,
+    marginBottom: 20,
   },
-  button: {
-    backgroundColor: '#3498db',
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 8,
-  },
-  buttonText: {
-    color: '#fff',
-    fontWeight: '600',
-  },
-  usernameInput: {
-    borderBottomWidth: 1,
-    borderColor: '#3498db',
-    fontSize: 14,
-    padding: 4,
-    color: 'black',
-  },
-  saveButton: {
-    backgroundColor: '#3498db',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 5,
-    marginRight: 5,
-  },
-  saveButtonText: {
-    color: '#fff',
-    fontWeight: '600',
-    fontSize: 14,
-  },
-  cancelButton: {
-    backgroundColor: '#e74c3c',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 5,
-  },
-  cancelButtonText: {
-    color: '#fff',
-    fontWeight: '600',
-    fontSize: 14,
-  },
-  editUsernameButton: {
-    backgroundColor: '#3498db',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 5,
-    alignSelf: 'center',
-    marginLeft: 10,
-    height: 32,
+  statsRow: {
+    flexDirection: 'row',
     justifyContent: 'center',
+    marginVertical: 10,
   },
-  editUsernameButtonText: {
-    color: '#fff',
-    fontWeight: '600',
+  statBox: {
+    alignItems: 'center',
+    marginHorizontal: 20,
+  },
+  statNumber: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#1A237E',
+  },
+  statLabel: {
     fontSize: 14,
+    color: '#607D8B',
+  },
+  statsContainer: {
+    width: '100%',
+    paddingHorizontal: 20,
+    marginTop: 10,
   },
 });
