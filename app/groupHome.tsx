@@ -34,37 +34,8 @@ import { auth } from '../firebaseConfig';
 import { onAuthStateChanged } from 'firebase/auth';
 import YoutubePlayer from 'react-native-youtube-iframe';
 
-// Define interfaces
-interface Game {
-  id: string;
-  name: string;
-  status: string;
-  createdBy: string;
-  url?: string;
-  videoId?: string;
-  createdAt: Date;
-}
+import { Game, Question, QuestionTemplate, Guess } from '@/types';
 
-interface Question {
-  id: string;
-  gameId: string;
-  question: string;
-  options: string[];
-  status: "active" | "closed" | "finished";
-  actual_result: string;
-  createdAt: Date;
-  createdBy: string;
-}
-
-interface Guess {
-  id: string;
-  prediction: string;
-  questionId: string;
-  playerId: string;
-  playerEmail?: string;
-  userName?: string;
-  timestamp: any;
-}
 
 export default function GroupHome() {
   // State variables
