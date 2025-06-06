@@ -38,24 +38,6 @@ export default function signout() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#FAFAFA', 
-  },
-  title: {
-    fontSize: 28, 
-    fontWeight: '800', 
-    color: '#1A237E', 
-    marginBottom: 40, 
-  },
-  separator: {
-    marginVertical: 30,
-    height: 2, 
-    width: '80%',
-    backgroundColor: '#E8EAF6', 
-  },
   button: {
     width: '90%',
     backgroundColor: '#3498db', 

@@ -66,7 +66,7 @@ const index = () => {
 
             <View style={styles.createAccContainer}>
               <Text style={styles.createAccText}>Don't have an account?</Text>
-              <TouchableOpacity onPress={() => router.push("/createAccount")}>
+              <TouchableOpacity onPress={() => router.replace("/createAccount")}>
                 <Text style={styles.createAccButtonText}> Create Account</Text>
               </TouchableOpacity>
             </View>
@@ -115,7 +115,7 @@ const styles = StyleSheet.create({
   button: {
     width: "90%",
     marginVertical: 15,
-    backgroundColor: "#5C6BC0",
+    backgroundColor: "#3949AB",
     padding: 20,
     borderRadius: 15,
     alignItems: "center",
@@ -149,11 +149,11 @@ createAccContainer: {
     marginBottom: 10,
   },
   createAccText: {
-    color: "#34495e",
+    color: "#00000",
     fontSize: 16,
   },
   createAccButtonText: {
-    color: "#5C6BC0",
+    color: "#3949AB",
     fontSize: 16,
     fontWeight: "700",
     marginLeft: 4,

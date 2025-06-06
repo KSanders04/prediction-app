@@ -4,7 +4,7 @@ import React from "react";
 
 const SelectedMode = () => {
   const handleSelect = (mode: "home" | "groupMode" | "") => {
-    router.push(`/${mode}`); //This assumes you have routes like /solo, /groups(empty for now because we do not have group page), /legend(empty string for now because we do not have legend page)
+    router.replace(`/${mode}`); //This assumes you have routes like /solo, /groups(empty for now because we do not have group page), /legend(empty string for now because we do not have legend page)
   };
 
   return (

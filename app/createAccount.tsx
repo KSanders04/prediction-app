@@ -92,6 +92,13 @@ const index = () => {
             <TouchableOpacity style={styles.button} onPress={handleSignUp} activeOpacity={0.8}>
               <Text style={styles.text}>Create Account</Text>
             </TouchableOpacity>
+
+            <View style={styles.signInContainer}>
+              <Text style={styles.signInText}>Already have an account?</Text>
+              <TouchableOpacity onPress={() => router.replace("/")}>
+                <Text style={styles.signInButtonText}>Sign In</Text>
+              </TouchableOpacity>
+            </View>
           </ScrollView>
         </TouchableWithoutFeedback>
       </KeyboardAvoidingView>
@@ -197,7 +204,7 @@ const styles = StyleSheet.create({
   button: {
     width: "90%",
     marginVertical: 15,
-    backgroundColor: "#5C6BC0",
+    backgroundColor: "#3949AB",
     padding: 20,
     borderRadius: 15,
     alignItems: "center",
@@ -212,5 +219,23 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontSize: 18,
     fontWeight: "600",
+  },
+  signInContainer: {
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    marginTop: 10,
+    marginBottom: 10,
+  },
+  signInText: {
+    color: "#34495e",
+    fontSize: 16,
+  },
+  signInButtonText: {
+    color: "#3949AB",
+    fontSize: 16,
+    fontWeight: "700",
+    marginLeft: 4,
+    textDecorationLine: "underline",
   },
 });
