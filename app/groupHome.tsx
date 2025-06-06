@@ -26,15 +26,11 @@ import {
   listenToGuesses,
 } from '../components/firebaseFunctions';
 
-import { GroupData } from '@/types';
-
-
-// Still need auth for user state
 import { auth } from '../firebaseConfig';
 import { onAuthStateChanged } from 'firebase/auth';
 import YoutubePlayer from 'react-native-youtube-iframe';
 
-import { Game, Question, QuestionTemplate, Guess } from '@/types';
+import { Game,Guess ,GroupData} from '@/types';
 
 
 export default function GroupHome() {
